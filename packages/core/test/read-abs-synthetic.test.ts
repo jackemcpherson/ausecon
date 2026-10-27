@@ -52,7 +52,7 @@ const readSynthetic = (table1: Uint8Array<ArrayBuffer>) => {
 
   return readAbs(AbsRequest.Catalogue({ catalogueNumber: "1234.0" })).pipe(
     Effect.provide(http.layer),
-    Effect.map((observations) => ({ observations, requests: http.requests })),
+    Effect.map((series) => ({ series, requests: http.requests })),
   );
 };
 
@@ -73,40 +73,34 @@ const validTable1 = syntheticTable([
 describe("readAbs on a synthetic release", () => {
   it.effect("titles each table from its latest release", () =>
     Effect.gen(function* () {
-      const { observations } = yield* readSynthetic(validTable1);
+      const { series } = yield* readSynthetic(validTable1);
 
       expect(
-        new Set(
-          observations
-            .filter((observation) => observation.tableId === "123401")
-            .map((observation) => observation.tableTitle),
-        ),
-      ).toEqual(new Set(["Table 1. Current title & notes"]));
+        series.filter(({ table }) => table.tableId === "123401").map(({ table }) => table),
+      ).toEqual([{ tableId: "123401", tableTitle: "Table 1. Current title & notes" }]);
     }),
   );
 
   it.effect("replaces spaces in a table URL and skips rows without a table URL", () =>
     Effect.gen(function* () {
-      const { observations, requests } = yield* readSynthetic(validTable1);
+      const { series, requests } = yield* readSynthetic(validTable1);
 
       expect(requests.map((request) => request.url)).toEqual(
         expect.arrayContaining([TABLE_1_URL, TABLE_2_URL]),
       );
       expect(requests).toHaveLength(3);
-      expect(observations.filter((observation) => observation.seriesId === "A1000002B")).toEqual([
+      expect(series.filter(({ seriesId }) => seriesId === "A1000002B")).toEqual([
         {
-          tableId: "table 2",
-          sheet: "Data1",
-          tableTitle: "Table 2. Spreadsheet name with a space",
-          date: "2026-01-01",
+          seriesId: "A1000002B",
           seriesDescription: "Synthetic count ;  Australia ;",
-          value: 7,
+          unit: "Number",
           seriesType: "Original",
           dataType: "FLOW",
-          collectionMonth: "1",
           frequency: "Month",
-          seriesId: "A1000002B",
-          unit: "Number",
+          collectionMonth: "1",
+          table: { tableId: "table 2", tableTitle: "Table 2. Spreadsheet name with a space" },
+          sheet: "Data1",
+          observations: [{ date: "2026-01-01", value: 7 }],
         },
       ]);
     }),
@@ -141,24 +135,31 @@ describe("readAbs on a synthetic release", () => {
         ["Enquiries", [["Not data"]]],
       ]);
 
-      const { observations } = yield* readSynthetic(table1);
+      const { series } = yield* readSynthetic(table1);
 
       expect(
-        observations
-          .filter((observation) => observation.tableId === "123401")
-          .map((observation) => [
-            observation.sheet,
-            observation.seriesId,
-            observation.date,
-            observation.value,
-          ]),
+        series
+          .filter(({ table }) => table.tableId === "123401")
+          .map(({ sheet, seriesId, observations }) => [sheet, seriesId, observations]),
       ).toEqual([
-        ["Data1", "A1000001A", "2025-12-01", 99.5],
-        ["Data1", "A1000001A", "2026-03-01", 103],
-        ["Data1", "A1000004D", "2026-01-01", 101.25],
-        ["Data1", "A1000004D", "2026-02-01", 102],
-        ["Data1", "A1000004D", "2026-03-01", 103],
-        ["Data2", "A1000005E", "2026-03-01", 50],
+        [
+          "Data1",
+          "A1000001A",
+          [
+            { date: "2025-12-01", value: 99.5 },
+            { date: "2026-03-01", value: 103 },
+          ],
+        ],
+        [
+          "Data1",
+          "A1000004D",
+          [
+            { date: "2026-01-01", value: 101.25 },
+            { date: "2026-02-01", value: 102 },
+            { date: "2026-03-01", value: 103 },
+          ],
+        ],
+        ["Data2", "A1000005E", [{ date: "2026-03-01", value: 50 }]],
       ]);
     }),
   );
@@ -170,13 +171,53 @@ describe("readAbs on a synthetic release", () => {
         ["Data table 1", absDataSheet([INDEX_SERIES], [[46023, 100]])],
       ]);
 
-      const { observations } = yield* readSynthetic(table1);
+      const { series } = yield* readSynthetic(table1);
 
       expect(
-        observations
-          .filter((observation) => observation.tableId === "123401")
-          .map((observation) => observation.sheet),
+        series.filter(({ table }) => table.tableId === "123401").map(({ sheet }) => sheet),
       ).toEqual(["Data table 1"]);
+    }),
+  );
+
+  it.effect("keeps a Series whose cells are all blank, with no observations", () =>
+    Effect.gen(function* () {
+      const table1 = syntheticTable([
+        [
+          "Data1",
+          absDataSheet(
+            [INDEX_SERIES, { ...INDEX_SERIES, seriesId: "A1000006F" }],
+            [[46023, 100, null]],
+          ),
+        ],
+      ]);
+
+      const { series } = yield* readSynthetic(table1);
+
+      expect(
+        series
+          .filter(({ table }) => table.tableId === "123401")
+          .map(({ seriesId, observations }) => [seriesId, observations.length]),
+      ).toEqual([
+        ["A1000001A", 1],
+        ["A1000006F", 0],
+      ]);
+    }),
+  );
+
+  it.effect("fails with WorkbookLayoutError when row 10 holds text that is not a series ID", () =>
+    Effect.gen(function* () {
+      const table1 = syntheticTable([
+        [
+          "Data1",
+          absDataSheet([INDEX_SERIES, { ...INDEX_SERIES, seriesId: "Total" }], [[46023, 100, 200]]),
+        ],
+      ]);
+
+      const error = yield* readSynthetic(table1).pipe(Effect.flip);
+
+      expect(error._tag).toBe("WorkbookLayoutError");
+      expect(error).toMatchObject({ tableId: "123401", sheet: "Data1" });
+      expect(error).toHaveProperty("reason", expect.stringContaining("C10"));
     }),
   );
 

@@ -57,8 +57,8 @@ const readTableNumbers = (
 
   return readAbs(AbsRequest.Catalogue({ catalogueNumber, tableNumbers })).pipe(
     Effect.provide(http.layer),
-    Effect.map((observations) => ({
-      tableIds: [...new Set(observations.map((observation) => observation.tableId))],
+    Effect.map((series) => ({
+      tableIds: [...new Set(series.map(({ table }) => table.tableId))],
       requests: http.requests.map((request) => request.url),
     })),
   );
@@ -130,15 +130,13 @@ describe("readAbs with table numbers", () => {
     Effect.gen(function* () {
       const http = fixtureHttpClient(wagePriceIndexResponses());
 
-      const observations = yield* readAbs(
+      const series = yield* readAbs(
         AbsRequest.Catalogue({ catalogueNumber: "6345.0", tableNumbers: ["1"] }),
       ).pipe(Effect.provide(http.layer));
 
       // Table 1 is 634501.xlsx; the unnumbered "All WPI Series" tables never match.
-      expect(observations).toHaveLength(3087);
-      expect(new Set(observations.map((observation) => observation.tableId))).toEqual(
-        new Set(["634501"]),
-      );
+      expect(series.reduce((total, { observations }) => total + observations.length, 0)).toBe(3087);
+      expect(new Set(series.map(({ table }) => table.tableId))).toEqual(new Set(["634501"]));
       expect(http.requests.filter((request) => request.url.endsWith(".xlsx"))).toHaveLength(1);
       expect(http.requests.some((request) => request.url.includes("ttitle"))).toBe(false);
     }),

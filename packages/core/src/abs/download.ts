@@ -1,13 +1,19 @@
 import { Effect } from "effect";
 import type { HttpClient, HttpClientError } from "effect/http";
 
-import type { Observation, WorkbookLayoutError } from "../types";
+import type { Series, WorkbookLayoutError } from "../types";
 import { absHttpClient } from "./http";
 import type { DirectoryTable } from "./latest-release";
 import { parseTable } from "./table-parse";
 
 /** The most tables downloaded at once. */
 const DOWNLOAD_CONCURRENCY = 4;
+
+/** One downloaded table and its series. */
+export interface TableSeries {
+  readonly table: DirectoryTable;
+  readonly series: ReadonlyArray<Series>;
+}
 
 /**
  * Download and parse tables.
@@ -16,36 +22,33 @@ const DOWNLOAD_CONCURRENCY = 4;
  * replacing spaces in the URL with `+`.
  *
  * @param tables - The tables to read.
- * @param isWanted - Whether to keep an observation of a table.
- * @returns An Effect that yields the kept observations of every table, in
+ * @returns An Effect that yields each distinct table with its series, in
  * table order.
  */
 export const readTables: (
   tables: ReadonlyArray<DirectoryTable>,
-  isWanted: (table: DirectoryTable, observation: Observation) => boolean,
 ) => Effect.Effect<
-  ReadonlyArray<Observation>,
+  ReadonlyArray<TableSeries>,
   WorkbookLayoutError | HttpClientError.HttpClientError,
   HttpClient.HttpClient
-> = Effect.fn("readTables")(function* (
-  tables: ReadonlyArray<DirectoryTable>,
-  isWanted: (table: DirectoryTable, observation: Observation) => boolean,
-) {
+> = Effect.fn("readTables")(function* (tables: ReadonlyArray<DirectoryTable>) {
   const client = yield* absHttpClient;
   const distinct = [...new Map(tables.map((table) => [table.tableUrl, table])).values()];
 
-  const tableObservations = yield* Effect.forEach(
+  return yield* Effect.forEach(
     distinct,
     (table) =>
       client.get(table.tableUrl.replaceAll(" ", "+")).pipe(
         Effect.flatMap((response) => response.arrayBuffer),
-        Effect.flatMap((body) => parseTable(new Uint8Array(body), table)),
-        Effect.map((observations) =>
-          observations.filter((observation) => isWanted(table, observation)),
+        // The Table names no URL, so the series do not carry it.
+        Effect.flatMap((body) =>
+          parseTable(new Uint8Array(body), {
+            tableId: table.tableId,
+            tableTitle: table.tableTitle,
+          }),
         ),
+        Effect.map((series) => ({ table, series })),
       ),
     { concurrency: DOWNLOAD_CONCURRENCY },
   );
-
-  return tableObservations.flat();
 });

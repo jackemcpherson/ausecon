@@ -1,13 +1,7 @@
-import { Effect, Option, Struct } from "effect";
+import { Effect, Option, Schema, Struct } from "effect";
 import { type CellObject, type WorkSheet, read, utils } from "xlsx";
 
-import { type Observation, type TableId, WorkbookLayoutError } from "../types";
-
-/** The table ID and title that each observation of a table carries. */
-export interface TableLabels {
-  readonly tableId: TableId;
-  readonly tableTitle: string;
-}
+import { type Series, SeriesId, type Table, WorkbookLayoutError } from "../types";
 
 /** Sheets that `readabs` skips by exact name. */
 const SKIPPED_SHEETS = new Set([
@@ -35,7 +29,7 @@ const MILLISECONDS_PER_DAY = 86_400_000;
 /** Excel serial day zero, 1899-12-30, in UTC. */
 const EXCEL_EPOCH = Date.UTC(1899, 11, 30);
 
-/** The column A labels of the metadata rows that an observation carries. */
+/** The column A labels of the metadata rows that a series carries. */
 const METADATA_LABELS = {
   unit: "Unit",
   seriesType: "Series Type",
@@ -53,8 +47,9 @@ type MetadataRows = Readonly<Record<MetadataField, number>>;
 interface DataSheet {
   readonly name: string;
   readonly sheet: WorkSheet;
-  readonly lastColumn: number;
   readonly metadataRows: MetadataRows;
+  /** The zero-based column and series ID of each series. */
+  readonly seriesColumns: ReadonlyArray<readonly [number, SeriesId]>;
   /** The zero-based row and ISO date of each period. */
   readonly periods: ReadonlyArray<readonly [number, string]>;
 }
@@ -96,13 +91,14 @@ const rowsBetween = (first: number, last: number): ReadonlyArray<number> =>
  * Check that a sheet has the ABS time series layout.
  *
  * Column A of row 10 must hold `Series ID`, rows 2 to 9 must hold each
- * metadata label that an observation carries, and each column A cell below
- * row 10 must hold a date, a blank, or a note.
+ * metadata label that a series carries, each column A cell below row 10 must
+ * hold a date, a blank, or a note, and each filled cell of row 10 must hold a
+ * series ID.
  */
 const checkLayout = (
   sheet: WorkSheet,
   name: string,
-  table: TableLabels,
+  table: Table,
 ): Effect.Effect<DataSheet, WorkbookLayoutError> => {
   const layoutError = (reason: string): Effect.Effect<never, WorkbookLayoutError> =>
     Effect.fail(new WorkbookLayoutError({ tableId: table.tableId, sheet: name, reason }));
@@ -147,99 +143,104 @@ const checkLayout = (
     );
   }
 
-  return Effect.succeed({
-    name,
-    sheet,
-    lastColumn: range.e.c,
-    metadataRows: metadataRows.value,
-    periods: rows.flatMap((row) => {
-      const serial = cellNumber(cellAt(sheet, row, 0));
+  const periods = rows.flatMap((row) => {
+    const serial = cellNumber(cellAt(sheet, row, 0));
 
-      return serial === undefined ? [] : [[row, excelSerialToIsoDate(serial)] as const];
-    }),
+    return serial === undefined ? [] : [[row, excelSerialToIsoDate(serial)] as const];
   });
+
+  const seriesIdCells = rowsBetween(1, range.e.c).flatMap((column) => {
+    const text = cellText(cellAt(sheet, SERIES_ID_ROW, column));
+
+    return text === "" ? [] : [[column, text] as const];
+  });
+
+  return Effect.forEach(seriesIdCells, ([column, text]) =>
+    Schema.decodeUnknownEffect(SeriesId)(text).pipe(
+      Effect.map((seriesId) => [column, seriesId] as const),
+      Effect.mapError(
+        () =>
+          new WorkbookLayoutError({
+            tableId: table.tableId,
+            sheet: name,
+            reason: `Cell ${utils.encode_cell({ r: SERIES_ID_ROW, c: column })} holds \`${text}\`, which is not a series ID.`,
+          }),
+      ),
+    ),
+  ).pipe(
+    Effect.map((seriesColumns) => ({
+      name,
+      sheet,
+      metadataRows: metadataRows.value,
+      seriesColumns,
+      periods,
+    })),
+  );
 };
 
-/** Read the observations of one checked data sheet. */
-const sheetObservations = (data: DataSheet, table: TableLabels): ReadonlyArray<Observation> => {
+/** Read the series of one checked data sheet, in column order. */
+const sheetSeries = (data: DataSheet, table: Table): ReadonlyArray<Series> => {
   const { sheet, metadataRows } = data;
 
-  return rowsBetween(1, data.lastColumn).flatMap((column) => {
-    const seriesId = cellText(cellAt(sheet, SERIES_ID_ROW, column));
-
-    if (seriesId === "") {
-      return [];
-    }
-
+  return data.seriesColumns.map(([column, seriesId]): Series => {
     const metadata = (field: MetadataField): string =>
       cellText(cellAt(sheet, metadataRows[field], column));
 
-    const seriesDescription = cellText(cellAt(sheet, 0, column));
-    const seriesType = metadata("seriesType");
-    const dataType = metadata("dataType");
-    const collectionMonth = metadata("collectionMonth");
-    const frequency = metadata("frequency");
-    const unit = metadata("unit");
+    return {
+      seriesId,
+      seriesDescription: cellText(cellAt(sheet, 0, column)),
+      unit: metadata("unit"),
+      seriesType: metadata("seriesType"),
+      dataType: metadata("dataType"),
+      frequency: metadata("frequency"),
+      collectionMonth: metadata("collectionMonth"),
+      table,
+      sheet: data.name,
+      observations: data.periods.flatMap(([row, date]) => {
+        const value = cellNumber(cellAt(sheet, row, column));
 
-    return data.periods.flatMap(([row, date]): ReadonlyArray<Observation> => {
-      const value = cellNumber(cellAt(sheet, row, column));
-
-      return value === undefined
-        ? []
-        : [
-            {
-              tableId: table.tableId,
-              sheet: data.name,
-              tableTitle: table.tableTitle,
-              date,
-              seriesDescription,
-              value,
-              seriesType,
-              dataType,
-              collectionMonth,
-              frequency,
-              seriesId,
-              unit,
-            },
-          ];
-    });
+        return value === undefined ? [] : [{ date, value }];
+      }),
+    };
   });
 };
 
 /**
- * Read the observations of an ABS time series table.
+ * Read the series of an ABS time series table.
  *
  * Skips the sheets `readabs` skips. Each data sheet must have `Series ID` in
  * column A of row 10. Below it, column A holds a date, a blank, or a note that
- * contains `Trend Break` or `see`; any other text fails the read. Rows with a
- * blank or a note, and blank or text value cells, are left out. Dates come
- * from Excel serial numbers, which is how `.xlsx` stores date cells.
+ * contains `Trend Break` or `see`; any other text fails the read. Each filled
+ * cell of row 10 starts one series and must hold a series ID. Rows with a
+ * blank or a note, and blank or text value cells, give no observation. Dates
+ * come from Excel serial numbers, which is how `.xlsx` stores date cells.
  *
  * @param bytes - The `.xlsx` file contents.
- * @param table - The table ID and title to put on each observation.
- * @returns An Effect that yields the observations, or fails with
- * `WorkbookLayoutError`.
+ * @param table - The Table to put on each series.
+ * @returns An Effect that yields the series in sheet order, then column order,
+ * or fails with `WorkbookLayoutError`.
  */
 export const parseTable: (
   bytes: Uint8Array,
-  table: TableLabels,
-) => Effect.Effect<ReadonlyArray<Observation>, WorkbookLayoutError> = Effect.fn("parseTable")(
-  function* (bytes: Uint8Array, table: TableLabels) {
-    const file = yield* Effect.try({
-      try: () => read(bytes, { type: "array", cellDates: false, cellHTML: false }),
-      catch: (cause) =>
-        new WorkbookLayoutError({
-          tableId: table.tableId,
-          reason: `The table cannot be opened as .xlsx: ${String(cause)}`,
-        }),
-    });
+  table: Table,
+) => Effect.Effect<ReadonlyArray<Series>, WorkbookLayoutError> = Effect.fn("parseTable")(function* (
+  bytes: Uint8Array,
+  table: Table,
+) {
+  const file = yield* Effect.try({
+    try: () => read(bytes, { type: "array", cellDates: false, cellHTML: false }),
+    catch: (cause) =>
+      new WorkbookLayoutError({
+        tableId: table.tableId,
+        reason: `The table cannot be opened as .xlsx: ${String(cause)}`,
+      }),
+  });
 
-    // SheetJS adds sheets in file order, so entry order is sheet order.
-    const sheets = yield* Effect.forEach(
-      Object.entries(file.Sheets).filter(([name]) => isDataSheet(name)),
-      ([name, sheet]) => checkLayout(sheet, name, table),
-    );
+  // SheetJS adds sheets in file order, so entry order is sheet order.
+  const sheets = yield* Effect.forEach(
+    Object.entries(file.Sheets).filter(([name]) => isDataSheet(name)),
+    ([name, sheet]) => checkLayout(sheet, name, table),
+  );
 
-    return sheets.flatMap((data) => sheetObservations(data, table));
-  },
-);
+  return sheets.flatMap((data) => sheetSeries(data, table));
+});

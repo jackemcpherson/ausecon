@@ -96,46 +96,53 @@ export const DecodedAbsRequest = Schema.Union([CatalogueRequest, SeriesRequest])
 export type DecodedAbsRequest = typeof DecodedAbsRequest.Type;
 
 /**
- * Options for a read.
+ * One table of a release: its table ID and, when known, its ABS title.
  *
- * Set `hasMetadata` to `false` to return only series ID, date, and value.
+ * Table IDs are not unique: two tables in different releases can share a file
+ * name and so a table ID. The read tells them apart by table URL internally.
  */
-export interface ReadOptions {
-  readonly hasMetadata?: boolean;
-}
+export const Table = Schema.Struct({
+  tableId: TableId,
+  tableTitle: Schema.optionalKey(Schema.String),
+});
+
+/** One table of a release. */
+export type Table = typeof Table.Type;
 
 /**
- * One value of a series for one period, with the series metadata.
+ * One value of a series for one period.
  *
- * The fields are the 12 `readabs` columns in camelCase, in the same order.
+ * `date` is an ISO `YYYY-MM-DD` string, so time zones never shift a period.
  */
 export const Observation = Schema.Struct({
-  tableId: TableId,
-  sheet: Schema.String,
-  tableTitle: Schema.String,
   date: Schema.String,
-  seriesDescription: Schema.String,
   value: Schema.Number,
-  seriesType: Schema.String,
-  dataType: Schema.String,
-  collectionMonth: Schema.String,
-  frequency: Schema.String,
-  seriesId: Schema.String,
-  unit: Schema.String,
 });
 
-/** One value of a series for one period, with the series metadata. */
+/** One value of a series for one period. */
 export type Observation = typeof Observation.Type;
 
-/** One value of a series for one period, without the series metadata. */
-export const ObservationValue = Schema.Struct({
-  seriesId: Schema.String,
-  date: Schema.String,
-  value: Schema.Number,
+/**
+ * One sequence of observations of one measure, read from one sheet of a table.
+ *
+ * The metadata fields come from the rows above the observations. The
+ * observations come in row order.
+ */
+export const Series = Schema.Struct({
+  seriesId: SeriesId,
+  seriesDescription: Schema.String,
+  unit: Schema.String,
+  seriesType: Schema.String,
+  dataType: Schema.String,
+  frequency: Schema.String,
+  collectionMonth: Schema.String,
+  table: Table,
+  sheet: Schema.String,
+  observations: Schema.Array(Observation),
 });
 
-/** One value of a series for one period, without the series metadata. */
-export type ObservationValue = typeof ObservationValue.Type;
+/** One sequence of observations of one measure, read from one sheet of a table. */
+export type Series = typeof Series.Type;
 
 /**
  * The request input failed schema decoding.

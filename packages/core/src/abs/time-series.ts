@@ -7,9 +7,7 @@ import {
   type CatalogueRequest,
   type DecodedAbsRequest,
   type InvalidRequest,
-  type Observation,
-  type ObservationValue,
-  type ReadOptions,
+  type Series,
   type SeriesId,
   SeriesNotFound,
   type SeriesRequest,
@@ -90,8 +88,11 @@ const catalogueTables = (
 
 const readCatalogue = (
   request: CatalogueRequest,
-): Effect.Effect<ReadonlyArray<Observation>, ReadAbsError, HttpClient.HttpClient> =>
-  catalogueTables(request).pipe(Effect.flatMap((tables) => readTables(tables, () => true)));
+): Effect.Effect<ReadonlyArray<Series>, ReadAbsError, HttpClient.HttpClient> =>
+  catalogueTables(request).pipe(
+    Effect.flatMap(readTables),
+    Effect.map((tables) => tables.flatMap(({ series }) => series)),
+  );
 
 /** The most series IDs looked up in the Time Series Directory at once. */
 const SERIES_CONCURRENCY = 4;
@@ -118,7 +119,7 @@ const seriesRow = (
 
 const readSeries = (
   request: SeriesRequest,
-): Effect.Effect<ReadonlyArray<Observation>, ReadAbsError, HttpClient.HttpClient> =>
+): Effect.Effect<ReadonlyArray<Series>, ReadAbsError, HttpClient.HttpClient> =>
   Effect.gen(function* () {
     const found = yield* Effect.forEach(new Set(request.seriesIds), seriesRow, {
       concurrency: SERIES_CONCURRENCY,
@@ -135,83 +136,47 @@ const readSeries = (
     // Keyed by URL, because two tables can share a file name and so a table ID.
     const wanted = new Set(rows.map((row) => `${row.tableUrl} ${row.seriesId}`));
 
-    return yield* readTables(tablesOf(rows), (table, observation) =>
-      wanted.has(`${table.tableUrl} ${observation.seriesId}`),
+    const tables = yield* readTables(tablesOf(rows));
+
+    return tables.flatMap(({ table, series }) =>
+      series.filter(({ seriesId }) => wanted.has(`${table.tableUrl} ${seriesId}`)),
     );
   });
 
 const readDecoded: (
   request: DecodedAbsRequest,
-) => Effect.Effect<ReadonlyArray<Observation>, ReadAbsError, HttpClient.HttpClient> =
+) => Effect.Effect<ReadonlyArray<Series>, ReadAbsError, HttpClient.HttpClient> =
   Match.type<DecodedAbsRequest>().pipe(
     Match.tag("Catalogue", readCatalogue),
     Match.tag("Series", readSeries),
     Match.exhaustive,
   );
 
-const withoutMetadata = (observation: Observation): ObservationValue => ({
-  seriesId: observation.seriesId,
-  date: observation.date,
-  value: observation.value,
-});
-
-const read: (
-  request: AbsRequest,
-  options?: ReadOptions,
-) => Effect.Effect<
-  ReadonlyArray<Observation> | ReadonlyArray<ObservationValue>,
-  ReadAbsError,
-  HttpClient.HttpClient
-> = Effect.fn("readAbs")(function* (request: AbsRequest, options?: ReadOptions) {
-  const observations = yield* readDecoded(yield* decodeRequest(request));
-
-  return options?.hasMetadata === false ? observations.map(withoutMetadata) : observations;
-});
-
 /**
  * Read ABS time series from the latest release.
  *
  * A `Catalogue` request reads the tables of a catalogue number. A `Series`
- * request reads series IDs. The read queries the Time Series Directory,
- * downloads each table once, and returns one flat list of observations.
+ * request reads series IDs and returns only the requested Series. The read
+ * queries the Time Series Directory, downloads each table once, and returns
+ * one Series per series ID and sheet: in table order, then sheet order, then
+ * column order.
  *
  * The Effect requires an `HttpClient`. The library never picks one, so it runs
  * on any runtime. The client must follow redirects, or return them so that
  * the library can follow them.
  *
  * @param request - What to read.
- * @param options - Set `hasMetadata: false` to return only series ID, date,
- * and value.
- * @returns An Effect that yields the observations.
+ * @returns An Effect that yields the Series.
  *
  * @example
  * ```typescript
- * const observations = yield* readAbs(AbsRequest.Catalogue({ catalogueNumber: "6345.0" }));
+ * const series = yield* readAbs(AbsRequest.Catalogue({ catalogueNumber: "6345.0" }));
  * ```
  */
-export function readAbs(
+export const readAbs: (
   request: AbsRequest,
-  options: { readonly hasMetadata: false },
-): Effect.Effect<ReadonlyArray<ObservationValue>, ReadAbsError, HttpClient.HttpClient>;
-export function readAbs(
-  request: AbsRequest,
-  options?: { readonly hasMetadata?: true },
-): Effect.Effect<ReadonlyArray<Observation>, ReadAbsError, HttpClient.HttpClient>;
-export function readAbs(
-  request: AbsRequest,
-  options?: ReadOptions,
-): Effect.Effect<
-  ReadonlyArray<Observation> | ReadonlyArray<ObservationValue>,
-  ReadAbsError,
-  HttpClient.HttpClient
->;
-export function readAbs(
-  request: AbsRequest,
-  options?: ReadOptions,
-): Effect.Effect<
-  ReadonlyArray<Observation> | ReadonlyArray<ObservationValue>,
-  ReadAbsError,
-  HttpClient.HttpClient
-> {
-  return read(request, options);
-}
+) => Effect.Effect<ReadonlyArray<Series>, ReadAbsError, HttpClient.HttpClient> = Effect.fn(
+  "readAbs",
+)(function* (request: AbsRequest) {
+  return yield* readDecoded(yield* decodeRequest(request));
+});
