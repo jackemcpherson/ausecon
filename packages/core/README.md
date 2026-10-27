@@ -15,21 +15,27 @@ Bun, and Deno.
 The library is in development. No release exists.
 
 The first release reads ABS time series by catalogue number and table number,
-or by series ID. The package now exports these schemas and errors:
+or by series ID. The `readAbs` function now reads every table of a catalogue
+number. Table numbers and series IDs come next.
 
-- `CatalogueNumber`, such as `6202.0` or `6291.0.55.001`
-- `SeriesId`, such as `A84423050A`
-- `TableNumber`, such as `1`, `5a`, or `X28`
-- `SeriesNotFound`, the error when the Time Series Directory has no record of
-  a series
+`readAbs` returns an `Effect` that needs an `HttpClient`. To run it without
+writing Effect code, provide the fetch-based client and call
+`Effect.runPromise`:
 
 ```ts
-import { CatalogueNumber } from "@ausecon/core";
-import { Schema } from "effect";
+import { AbsRequest, readAbs } from "@ausecon/core";
+import { Effect } from "effect";
+import { FetchHttpClient } from "effect/http";
 
-Schema.is(CatalogueNumber)("6202.0"); // true
-Schema.is(CatalogueNumber)("6202"); // false
+const observations = await Effect.runPromise(
+  readAbs(AbsRequest.Catalogue({ catalogueNumber: "6345.0" })).pipe(
+    Effect.provide(FetchHttpClient.layer),
+  ),
+);
 ```
+
+Pass `{ metadata: false }` as the second argument to get only the series ID,
+date, and value of each observation.
 
 ## Install
 
