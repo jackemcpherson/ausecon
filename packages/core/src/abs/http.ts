@@ -15,8 +15,10 @@ import { AbsUnavailable } from "../types";
 export const USER_AGENT = "ausecon (+https://github.com/jackemcpherson/ausecon)";
 
 /**
- * The most requests sent to the ABS at once: Time Series Directory pages,
- * series lookups, and table downloads.
+ * The most concurrent requests each stage of a read sends to the ABS: the
+ * series lookups, the Time Series Directory pages of one query, or the table
+ * downloads. It is not a global cap: each series lookup fetches its own pages,
+ * so lookups and their pages can send up to this limit squared.
  */
 export const ABS_CONCURRENCY = 4;
 
