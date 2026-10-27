@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Layer } from "effect";
-import { HttpClient, HttpClientError } from "effect/http";
+import { Effect, Fiber, Latch, Layer, Queue, Ref } from "effect";
+import { HttpClient, HttpClientError, HttpClientResponse } from "effect/http";
 import {
   type RecordedResponse,
   directoryUrl,
@@ -179,6 +179,35 @@ describe("readAbs on a synthetic release", () => {
       expect(
         series.filter(({ table }) => table.tableId === "123401").map(({ sheet }) => sheet),
       ).toEqual(["Data table 1"]);
+    }),
+  );
+
+  it.effect("skips a Technical notes sheet and reads a sheet named Table without a space", () =>
+    Effect.gen(function* () {
+      const table1 = syntheticTable([
+        ["Technical notes", [["Not data"]]],
+        ["Table_1", absDataSheet([INDEX_SERIES], [[46023, 100]])],
+      ]);
+
+      const { series } = yield* readSynthetic(table1);
+
+      expect(
+        series.filter(({ table }) => table.tableId === "123401").map(({ sheet }) => sheet),
+      ).toEqual(["Table_1"]);
+    }),
+  );
+
+  it.effect("keeps each Series of a sheet with no rows below row 10, with no observations", () =>
+    Effect.gen(function* () {
+      const { series } = yield* readSynthetic(
+        syntheticTable([["Data1", absDataSheet([INDEX_SERIES], [])]]),
+      );
+
+      expect(
+        series
+          .filter(({ table }) => table.tableId === "123401")
+          .map(({ seriesId, observations }) => [seriesId, observations]),
+      ).toEqual([["A1000001A", []]]);
     }),
   );
 
@@ -409,6 +438,97 @@ describe("readAbs edge responses", () => {
 
       expect(error._tag).toBe("CatalogueNotFound");
       expect(error).toHaveProperty("catalogueNumber", "6204.0.55.001");
+    }),
+  );
+
+  it.effect("fails with CatalogueNotFound when the only table URL is whitespace", () =>
+    Effect.gen(function* () {
+      const http = fixtureHttpClient(
+        new Map<string, RecordedResponse>([
+          [
+            directoryUrl({ catno: "1234.0" }),
+            {
+              status: 200,
+              body: `<?xml version="1.0" encoding="utf-8" ?><TimeSeriesIndex><Series><ProductReleaseDate>15/04/2026</ProductReleaseDate><TableURL><![CDATA[   ]]></TableURL><TableTitle>Table 1. No spreadsheet</TableTitle><TableOrder>1</TableOrder><SeriesID>A1000001A</SeriesID></Series></TimeSeriesIndex>`,
+            },
+          ],
+        ]),
+      );
+
+      const error = yield* readAbs(AbsRequest.Catalogue({ catalogueNumber: "1234.0" })).pipe(
+        Effect.flip,
+        Effect.provide(http.layer),
+      );
+
+      expect(error._tag).toBe("CatalogueNotFound");
+      expect(http.requests).toHaveLength(1);
+    }),
+  );
+
+  it.effect("downloads four tables at a time", () =>
+    Effect.gen(function* () {
+      const tableUrls = Array.from(
+        { length: 6 },
+        (_, index) => `${SYNTHETIC_RELEASE}12340${index + 1}.xlsx`,
+      );
+
+      const directory = tableUrls
+        .map(
+          (tableUrl, index) =>
+            `<Series><ProductReleaseDate>15/04/2026</ProductReleaseDate><TableURL>${tableUrl}</TableURL><TableTitle>Table ${index + 1}. Synthetic</TableTitle><TableOrder>${index + 1}</TableOrder><SeriesID>A100000${index + 1}A</SeriesID></Series>`,
+        )
+        .join("");
+
+      const table = syntheticTable([["Data1", absDataSheet([INDEX_SERIES], [[46023, 100]])]]);
+      const inFlight = yield* Ref.make(0);
+      const mostInFlight = yield* Ref.make(0);
+      const arrivals = yield* Queue.unbounded<string>();
+      const release = yield* Latch.make(false);
+
+      // Each download waits for the release, so the downloads pile up to the limit.
+      const download = (url: string) =>
+        Effect.gen(function* () {
+          const count = yield* Ref.updateAndGet(inFlight, (n) => n + 1);
+
+          yield* Ref.update(mostInFlight, (most) => Math.max(most, count));
+          yield* Queue.offer(arrivals, url);
+          yield* release.await;
+          yield* Ref.update(inFlight, (n) => n - 1);
+
+          return table;
+        });
+
+      const client = HttpClient.make((request, url) =>
+        Effect.map(
+          url.pathname.endsWith(".xlsx")
+            ? download(url.toString())
+            : Effect.succeed(
+                new TextEncoder().encode(
+                  `<?xml version="1.0" encoding="utf-8" ?><TimeSeriesIndex>${directory}</TimeSeriesIndex>`,
+                ),
+              ),
+          (body) => HttpClientResponse.fromWeb(request, new Response(body)),
+        ),
+      );
+
+      const fiber = yield* readAbs(AbsRequest.Catalogue({ catalogueNumber: "1234.0" })).pipe(
+        Effect.provide(Layer.succeed(HttpClient.HttpClient, client)),
+        Effect.forkChild,
+      );
+
+      // Under a lower limit, the fourth arrival never comes and the test times out.
+      for (const _ of [1, 2, 3, 4]) {
+        yield* Queue.take(arrivals);
+      }
+
+      expect(yield* Ref.get(inFlight)).toBe(4);
+
+      yield* Latch.open(release);
+
+      const series = yield* Fiber.join(fiber);
+
+      expect(series).toHaveLength(6);
+      expect(yield* Ref.get(mostInFlight)).toBe(4);
     }),
   );
 
