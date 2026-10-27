@@ -90,3 +90,8 @@ style = "aligned"
 
 [MD063]
 style = "title-case"
+
+# Project exception: every release section repeats the same subheadings, such
+# as "Added", so their anchors collide by design. See guide correction F15.
+[per-file-ignores]
+"CHANGELOG.md" = ["MD080"]

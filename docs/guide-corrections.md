@@ -45,3 +45,9 @@ the guide after `ausecon` v0.1.0 proves the correction.
   Markdown formatter.
 - F14: The guide's tooling tsconfig must set `allowImportingTsExtensions`.
   The vendored anti-slop plugins import files with a `.ts` extension.
+
+## Faults Found During Release
+
+- F15: The Markdown guide enables MD080, but a changelog repeats subheadings
+  such as `Added` in every release section, so their anchors collide. Ignore
+  MD080 for `CHANGELOG.md` with `per-file-ignores`.

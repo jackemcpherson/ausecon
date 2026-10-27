@@ -1,6 +1,6 @@
 {
   "name": "ausecon",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Read Australian economic data from the ABS and RBA in your terminal.",
   "license": "MIT",
   "repository": {

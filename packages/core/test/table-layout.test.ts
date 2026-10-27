@@ -5,7 +5,7 @@ import { read, utils } from "xlsx";
 
 const fixture = readFileSync(new URL("fixtures/634501.xlsx", import.meta.url));
 
-describe("ABS time series workbook layout", () => {
+describe("ABS time series table layout", () => {
   it("keeps the series ID label in the tenth row of each data sheet", () => {
     const workbook = read(fixture, { type: "buffer" });
     const sheet = workbook.Sheets["Data1"];
