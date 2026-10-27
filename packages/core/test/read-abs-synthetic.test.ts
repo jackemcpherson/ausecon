@@ -1,14 +1,17 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect } from "effect";
-
-import { AbsRequest, readAbs } from "../src/index";
+import { Effect, Fiber, Latch, Layer, Queue, Ref } from "effect";
+import { HttpClient, HttpClientError, HttpClientResponse } from "effect/http";
 import {
   type RecordedResponse,
   directoryUrl,
   fixtureHttpClient,
   recorded,
-} from "./fixture-http-client";
-import { type SyntheticSeries, absDataSheet, syntheticTable } from "./synthetic-table";
+  type SyntheticSeries,
+  absDataSheet,
+  syntheticTable,
+} from "@ausecon/testkit";
+
+import { AbsRequest, readAbs } from "../src/index";
 
 // The synthetic catalogue `1234.0` has one table with a superseded and a
 // current release, one table whose URL has a space, and one row with no URL.
@@ -52,7 +55,7 @@ const readSynthetic = (table1: Uint8Array<ArrayBuffer>) => {
 
   return readAbs(AbsRequest.Catalogue({ catalogueNumber: "1234.0" })).pipe(
     Effect.provide(http.layer),
-    Effect.map((observations) => ({ observations, requests: http.requests })),
+    Effect.map((series) => ({ series, requests: http.requests })),
   );
 };
 
@@ -73,40 +76,34 @@ const validTable1 = syntheticTable([
 describe("readAbs on a synthetic release", () => {
   it.effect("titles each table from its latest release", () =>
     Effect.gen(function* () {
-      const { observations } = yield* readSynthetic(validTable1);
+      const { series } = yield* readSynthetic(validTable1);
 
       expect(
-        new Set(
-          observations
-            .filter((observation) => observation.tableId === "123401")
-            .map((observation) => observation.tableTitle),
-        ),
-      ).toEqual(new Set(["Table 1. Current title & notes"]));
+        series.filter(({ table }) => table.tableId === "123401").map(({ table }) => table),
+      ).toEqual([{ tableId: "123401", tableTitle: "Table 1. Current title & notes" }]);
     }),
   );
 
   it.effect("replaces spaces in a table URL and skips rows without a table URL", () =>
     Effect.gen(function* () {
-      const { observations, requests } = yield* readSynthetic(validTable1);
+      const { series, requests } = yield* readSynthetic(validTable1);
 
       expect(requests.map((request) => request.url)).toEqual(
         expect.arrayContaining([TABLE_1_URL, TABLE_2_URL]),
       );
       expect(requests).toHaveLength(3);
-      expect(observations.filter((observation) => observation.seriesId === "A1000002B")).toEqual([
+      expect(series.filter(({ seriesId }) => seriesId === "A1000002B")).toEqual([
         {
-          tableId: "table 2",
-          sheet: "Data1",
-          tableTitle: "Table 2. Spreadsheet name with a space",
-          date: "2026-01-01",
+          seriesId: "A1000002B",
           seriesDescription: "Synthetic count ;  Australia ;",
-          value: 7,
+          unit: "Number",
           seriesType: "Original",
           dataType: "FLOW",
-          collectionMonth: "1",
           frequency: "Month",
-          seriesId: "A1000002B",
-          unit: "Number",
+          collectionMonth: "1",
+          table: { tableId: "table 2", tableTitle: "Table 2. Spreadsheet name with a space" },
+          sheet: "Data1",
+          observations: [{ date: "2026-01-01", value: 7 }],
         },
       ]);
     }),
@@ -141,24 +138,31 @@ describe("readAbs on a synthetic release", () => {
         ["Enquiries", [["Not data"]]],
       ]);
 
-      const { observations } = yield* readSynthetic(table1);
+      const { series } = yield* readSynthetic(table1);
 
       expect(
-        observations
-          .filter((observation) => observation.tableId === "123401")
-          .map((observation) => [
-            observation.sheet,
-            observation.seriesId,
-            observation.date,
-            observation.value,
-          ]),
+        series
+          .filter(({ table }) => table.tableId === "123401")
+          .map(({ sheet, seriesId, observations }) => [sheet, seriesId, observations]),
       ).toEqual([
-        ["Data1", "A1000001A", "2025-12-01", 99.5],
-        ["Data1", "A1000001A", "2026-03-01", 103],
-        ["Data1", "A1000004D", "2026-01-01", 101.25],
-        ["Data1", "A1000004D", "2026-02-01", 102],
-        ["Data1", "A1000004D", "2026-03-01", 103],
-        ["Data2", "A1000005E", "2026-03-01", 50],
+        [
+          "Data1",
+          "A1000001A",
+          [
+            { date: "2025-12-01", value: 99.5 },
+            { date: "2026-03-01", value: 103 },
+          ],
+        ],
+        [
+          "Data1",
+          "A1000004D",
+          [
+            { date: "2026-01-01", value: 101.25 },
+            { date: "2026-02-01", value: 102 },
+            { date: "2026-03-01", value: 103 },
+          ],
+        ],
+        ["Data2", "A1000005E", [{ date: "2026-03-01", value: 50 }]],
       ]);
     }),
   );
@@ -170,17 +174,86 @@ describe("readAbs on a synthetic release", () => {
         ["Data table 1", absDataSheet([INDEX_SERIES], [[46023, 100]])],
       ]);
 
-      const { observations } = yield* readSynthetic(table1);
+      const { series } = yield* readSynthetic(table1);
 
       expect(
-        observations
-          .filter((observation) => observation.tableId === "123401")
-          .map((observation) => observation.sheet),
+        series.filter(({ table }) => table.tableId === "123401").map(({ sheet }) => sheet),
       ).toEqual(["Data table 1"]);
     }),
   );
 
-  it.effect("fails with WorkbookLayoutError when column A holds text that is not a note", () =>
+  it.effect("skips a Technical notes sheet and reads a sheet named Table without a space", () =>
+    Effect.gen(function* () {
+      const table1 = syntheticTable([
+        ["Technical notes", [["Not data"]]],
+        ["Table_1", absDataSheet([INDEX_SERIES], [[46023, 100]])],
+      ]);
+
+      const { series } = yield* readSynthetic(table1);
+
+      expect(
+        series.filter(({ table }) => table.tableId === "123401").map(({ sheet }) => sheet),
+      ).toEqual(["Table_1"]);
+    }),
+  );
+
+  it.effect("keeps each Series of a sheet with no rows below row 10, with no observations", () =>
+    Effect.gen(function* () {
+      const { series } = yield* readSynthetic(
+        syntheticTable([["Data1", absDataSheet([INDEX_SERIES], [])]]),
+      );
+
+      expect(
+        series
+          .filter(({ table }) => table.tableId === "123401")
+          .map(({ seriesId, observations }) => [seriesId, observations]),
+      ).toEqual([["A1000001A", []]]);
+    }),
+  );
+
+  it.effect("keeps a Series whose cells are all blank, with no observations", () =>
+    Effect.gen(function* () {
+      const table1 = syntheticTable([
+        [
+          "Data1",
+          absDataSheet(
+            [INDEX_SERIES, { ...INDEX_SERIES, seriesId: "A1000006F" }],
+            [[46023, 100, null]],
+          ),
+        ],
+      ]);
+
+      const { series } = yield* readSynthetic(table1);
+
+      expect(
+        series
+          .filter(({ table }) => table.tableId === "123401")
+          .map(({ seriesId, observations }) => [seriesId, observations.length]),
+      ).toEqual([
+        ["A1000001A", 1],
+        ["A1000006F", 0],
+      ]);
+    }),
+  );
+
+  it.effect("fails with TableLayoutError when row 10 holds text that is not a series ID", () =>
+    Effect.gen(function* () {
+      const table1 = syntheticTable([
+        [
+          "Data1",
+          absDataSheet([INDEX_SERIES, { ...INDEX_SERIES, seriesId: "Total" }], [[46023, 100, 200]]),
+        ],
+      ]);
+
+      const error = yield* readSynthetic(table1).pipe(Effect.flip);
+
+      expect(error._tag).toBe("TableLayoutError");
+      expect(error).toMatchObject({ tableId: "123401", sheet: "Data1" });
+      expect(error).toHaveProperty("reason", expect.stringContaining("C10"));
+    }),
+  );
+
+  it.effect("fails with TableLayoutError when column A holds text that is not a note", () =>
     Effect.gen(function* () {
       const table1 = syntheticTable([
         ["Data1", absDataSheet([INDEX_SERIES], [[46023, 100]])],
@@ -198,13 +271,13 @@ describe("readAbs on a synthetic release", () => {
 
       const error = yield* readSynthetic(table1).pipe(Effect.flip);
 
-      expect(error._tag).toBe("WorkbookLayoutError");
+      expect(error._tag).toBe("TableLayoutError");
       expect(error).toMatchObject({ tableId: "123401", sheet: "Data2" });
       expect(error).toHaveProperty("reason", expect.stringContaining("A12"));
     }),
   );
 
-  it.effect("fails with WorkbookLayoutError when row 10 does not hold Series ID", () =>
+  it.effect("fails with TableLayoutError when row 10 does not hold Series ID", () =>
     Effect.gen(function* () {
       const table1 = syntheticTable([
         ["Data1", absDataSheet([INDEX_SERIES], [[46023, 100]]).slice(1)],
@@ -212,7 +285,7 @@ describe("readAbs on a synthetic release", () => {
 
       const error = yield* readSynthetic(table1).pipe(Effect.flip);
 
-      expect(error._tag).toBe("WorkbookLayoutError");
+      expect(error._tag).toBe("TableLayoutError");
       expect(error).toMatchObject({
         tableId: "123401",
         sheet: "Data1",
@@ -220,7 +293,7 @@ describe("readAbs on a synthetic release", () => {
     }),
   );
 
-  it.effect("fails with WorkbookLayoutError when a metadata row is missing", () =>
+  it.effect("fails with TableLayoutError when a metadata row is missing", () =>
     Effect.gen(function* () {
       const rows = absDataSheet([INDEX_SERIES], [[46023, 100]]).map((row) =>
         row[0] === "Collection Month" ? ["Collection month", ...row.slice(1)] : row,
@@ -233,26 +306,120 @@ describe("readAbs on a synthetic release", () => {
         ]),
       ).pipe(Effect.flip);
 
-      expect(error._tag).toBe("WorkbookLayoutError");
+      expect(error._tag).toBe("TableLayoutError");
       expect(error).toMatchObject({ tableId: "123401", sheet: "Data2" });
       expect(error).toHaveProperty("reason", expect.stringContaining("collectionMonth"));
     }),
   );
 
-  it.effect("fails with WorkbookLayoutError when the table cannot be opened", () =>
+  it.effect("fails with TableLayoutError when the table cannot be opened", () =>
     Effect.gen(function* () {
       const error = yield* readSynthetic(
         new TextEncoder().encode("<html><body>Not found</body></html>"),
       ).pipe(Effect.flip);
 
-      expect(error._tag).toBe("WorkbookLayoutError");
+      expect(error._tag).toBe("TableLayoutError");
       expect(error).toHaveProperty("tableId", "123401");
       expect(error).not.toHaveProperty("sheet");
+    }),
+  );
+  it.effect("keeps the title of each table when two tables share a file name", () =>
+    Effect.gen(function* () {
+      const firstUrl = "https://www.abs.gov.au/synthetic/first/latest-release/data.xlsx";
+      const secondUrl = "https://www.abs.gov.au/synthetic/second/latest-release/data.xlsx";
+
+      const row = (tableUrl: string, title: string, tableOrder: number, seriesId: string) =>
+        `<Series><ProductReleaseDate>15/04/2026</ProductReleaseDate><TableURL>${tableUrl}</TableURL><TableTitle>${title}</TableTitle><TableOrder>${tableOrder}</TableOrder><SeriesID>${seriesId}</SeriesID></Series>`;
+
+      const table = (series: SyntheticSeries): RecordedResponse => ({
+        status: 200,
+        body: syntheticTable([["Data1", absDataSheet([series], [[46023, 1]])]]),
+      });
+
+      const http = fixtureHttpClient(
+        new Map<string, RecordedResponse>([
+          [
+            directoryUrl({ catno: "1234.0" }),
+            {
+              status: 200,
+              body: `<?xml version="1.0" encoding="utf-8" ?><TimeSeriesIndex>${row(firstUrl, "Table 1. First", 1, "A1000001A")}${row(secondUrl, "Table 2. Second", 2, "A1000002B")}</TimeSeriesIndex>`,
+            },
+          ],
+          [firstUrl, table(INDEX_SERIES)],
+          [secondUrl, table(COUNT_SERIES)],
+        ]),
+      );
+
+      const series = yield* readAbs(AbsRequest.Catalogue({ catalogueNumber: "1234.0" })).pipe(
+        Effect.provide(http.layer),
+      );
+
+      expect(series.map(({ seriesId, table }) => [seriesId, table])).toEqual([
+        ["A1000001A", { tableId: "data", tableTitle: "Table 1. First" }],
+        ["A1000002B", { tableId: "data", tableTitle: "Table 2. Second" }],
+      ]);
     }),
   );
 });
 
 describe("readAbs edge responses", () => {
+  it.effect("fails with SeriesNotFound for a series ID its listed table lacks", () =>
+    Effect.gen(function* () {
+      const directoryRow = (seriesId: string): RecordedResponse => ({
+        status: 200,
+        body: `<?xml version="1.0" encoding="utf-8" ?><TimeSeriesIndex><Series><ProductReleaseDate>15/04/2026</ProductReleaseDate><TableURL>${TABLE_1_URL}</TableURL><TableTitle>Table 1. Index</TableTitle><TableOrder>1</TableOrder><SeriesID>${seriesId}</SeriesID></Series></TimeSeriesIndex>`,
+      });
+
+      const http = fixtureHttpClient(
+        new Map<string, RecordedResponse>([
+          [directoryUrl({ sid: "A1000001A" }), directoryRow("A1000001A")],
+          [directoryUrl({ sid: "A1000009J" }), directoryRow("A1000009J")],
+          [TABLE_1_URL, { status: 200, body: validTable1 }],
+        ]),
+      );
+
+      const error = yield* readAbs(
+        AbsRequest.Series({ seriesIds: ["A1000009J", "A1000001A", "A1000009J"] }),
+      ).pipe(Effect.flip, Effect.provide(http.layer));
+
+      expect(error._tag).toBe("SeriesNotFound");
+      expect(error).toHaveProperty("seriesIds", ["A1000009J"]);
+    }),
+  );
+
+  it.effect(
+    "fails with TimeSeriesDirectoryError for a listed table URL that cannot be requested",
+    () =>
+      Effect.gen(function* () {
+        const http = fixtureHttpClient(
+          new Map<string, RecordedResponse>([
+            [
+              directoryUrl({ catno: "1234.0" }),
+              {
+                status: 200,
+                body: `<?xml version="1.0" encoding="utf-8" ?><TimeSeriesIndex><Series><ProductReleaseDate>15/04/2026</ProductReleaseDate><TableURL>http://[not a host]/data.xlsx</TableURL><TableTitle>Table 1. Bad</TableTitle><TableOrder>1</TableOrder><SeriesID>A1000001A</SeriesID></Series></TimeSeriesIndex>`,
+              },
+            ],
+          ]),
+        );
+
+        const error = yield* readAbs(AbsRequest.Catalogue({ catalogueNumber: "1234.0" })).pipe(
+          Effect.flip,
+          Effect.provide(http.layer),
+        );
+
+        expect(error._tag).toBe("TimeSeriesDirectoryError");
+        expect(error).toHaveProperty("url", "http://[not+a+host]/data.xlsx");
+        expect(error).toHaveProperty(
+          "reason",
+          expect.stringMatching(
+            /^The Time Series Directory lists a URL that cannot be requested: \S/,
+          ),
+        );
+        expect(http.requests).toHaveLength(1);
+      }),
+  );
+
   it.effect("fails with CatalogueNotFound when no row links to a table", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(
@@ -274,6 +441,97 @@ describe("readAbs edge responses", () => {
     }),
   );
 
+  it.effect("fails with CatalogueNotFound when the only table URL is whitespace", () =>
+    Effect.gen(function* () {
+      const http = fixtureHttpClient(
+        new Map<string, RecordedResponse>([
+          [
+            directoryUrl({ catno: "1234.0" }),
+            {
+              status: 200,
+              body: `<?xml version="1.0" encoding="utf-8" ?><TimeSeriesIndex><Series><ProductReleaseDate>15/04/2026</ProductReleaseDate><TableURL><![CDATA[   ]]></TableURL><TableTitle>Table 1. No spreadsheet</TableTitle><TableOrder>1</TableOrder><SeriesID>A1000001A</SeriesID></Series></TimeSeriesIndex>`,
+            },
+          ],
+        ]),
+      );
+
+      const error = yield* readAbs(AbsRequest.Catalogue({ catalogueNumber: "1234.0" })).pipe(
+        Effect.flip,
+        Effect.provide(http.layer),
+      );
+
+      expect(error._tag).toBe("CatalogueNotFound");
+      expect(http.requests).toHaveLength(1);
+    }),
+  );
+
+  it.effect("downloads four tables at a time", () =>
+    Effect.gen(function* () {
+      const tableUrls = Array.from(
+        { length: 6 },
+        (_, index) => `${SYNTHETIC_RELEASE}12340${index + 1}.xlsx`,
+      );
+
+      const directory = tableUrls
+        .map(
+          (tableUrl, index) =>
+            `<Series><ProductReleaseDate>15/04/2026</ProductReleaseDate><TableURL>${tableUrl}</TableURL><TableTitle>Table ${index + 1}. Synthetic</TableTitle><TableOrder>${index + 1}</TableOrder><SeriesID>A100000${index + 1}A</SeriesID></Series>`,
+        )
+        .join("");
+
+      const table = syntheticTable([["Data1", absDataSheet([INDEX_SERIES], [[46023, 100]])]]);
+      const inFlight = yield* Ref.make(0);
+      const mostInFlight = yield* Ref.make(0);
+      const arrivals = yield* Queue.unbounded<string>();
+      const release = yield* Latch.make(false);
+
+      // Each download waits for the release, so the downloads pile up to the limit.
+      const download = (url: string) =>
+        Effect.gen(function* () {
+          const count = yield* Ref.updateAndGet(inFlight, (n) => n + 1);
+
+          yield* Ref.update(mostInFlight, (most) => Math.max(most, count));
+          yield* Queue.offer(arrivals, url);
+          yield* release.await;
+          yield* Ref.update(inFlight, (n) => n - 1);
+
+          return table;
+        });
+
+      const client = HttpClient.make((request, url) =>
+        Effect.map(
+          url.pathname.endsWith(".xlsx")
+            ? download(url.toString())
+            : Effect.succeed(
+                new TextEncoder().encode(
+                  `<?xml version="1.0" encoding="utf-8" ?><TimeSeriesIndex>${directory}</TimeSeriesIndex>`,
+                ),
+              ),
+          (body) => HttpClientResponse.fromWeb(request, new Response(body)),
+        ),
+      );
+
+      const fiber = yield* readAbs(AbsRequest.Catalogue({ catalogueNumber: "1234.0" })).pipe(
+        Effect.provide(Layer.succeed(HttpClient.HttpClient, client)),
+        Effect.forkChild,
+      );
+
+      // Under a lower limit, the fourth arrival never comes and the test times out.
+      for (const _ of [1, 2, 3, 4]) {
+        yield* Queue.take(arrivals);
+      }
+
+      expect(yield* Ref.get(inFlight)).toBe(4);
+
+      yield* Latch.open(release);
+
+      const series = yield* Fiber.join(fiber);
+
+      expect(series).toHaveLength(6);
+      expect(yield* Ref.get(mostInFlight)).toBe(4);
+    }),
+  );
+
   it.effect("reads one directory page without NumPages and fails on an HTTP 404", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(
@@ -291,8 +549,13 @@ describe("readAbs edge responses", () => {
         Effect.provide(http.layer),
       );
 
-      expect(error._tag).toBe("HttpClientError");
-      expect(error).toHaveProperty("reason._tag", "StatusCodeError");
+      expect(error._tag).toBe("AbsUnavailable");
+      expect(error).toHaveProperty(
+        "url",
+        "https://www.abs.gov.au/statistics/economy/business-indicators/counts-australian-businesses-including-entries-and-exits/latest-release/8165ts13.xlsx",
+      );
+      expect(error).toHaveProperty("status", 404);
+      expect(error).toHaveProperty("detail", "The ABS answered with status 404.");
       expect(http.requests).toHaveLength(2);
     }),
   );
@@ -328,6 +591,85 @@ describe("readAbs edge responses", () => {
         expect.stringContaining("ausecon"),
         expect.stringContaining("ausecon"),
       ]);
+    }),
+  );
+
+  it.effect("fails with AbsUnavailable without a status when a request gets no response", () =>
+    Effect.gen(function* () {
+      const offline = Layer.succeed(
+        HttpClient.HttpClient,
+        HttpClient.make((request) =>
+          Effect.fail(
+            new HttpClientError.HttpClientError({
+              reason: new HttpClientError.TransportError({ request, description: "offline" }),
+            }),
+          ),
+        ),
+      );
+
+      const error = yield* readAbs(AbsRequest.Catalogue({ catalogueNumber: "1234.0" })).pipe(
+        Effect.flip,
+        Effect.provide(offline),
+      );
+
+      expect(error._tag).toBe("AbsUnavailable");
+      expect(error).toHaveProperty("url", directoryUrl({ catno: "1234.0" }));
+      expect(error).toHaveProperty("detail", "offline");
+      expect(error).not.toHaveProperty("status");
+    }),
+  );
+
+  it.effect("keeps the fetch error message as the detail when a request gets no response", () =>
+    Effect.gen(function* () {
+      const offline = Layer.succeed(
+        HttpClient.HttpClient,
+        HttpClient.make((request) =>
+          Effect.fail(
+            new HttpClientError.HttpClientError({
+              reason: new HttpClientError.TransportError({
+                request,
+                cause: new TypeError("getaddrinfo ENOTFOUND abs.gov.au"),
+              }),
+            }),
+          ),
+        ),
+      );
+
+      const error = yield* readAbs(AbsRequest.Catalogue({ catalogueNumber: "1234.0" })).pipe(
+        Effect.flip,
+        Effect.provide(offline),
+      );
+
+      expect(error._tag).toBe("AbsUnavailable");
+      expect(error).toHaveProperty("detail", "getaddrinfo ENOTFOUND abs.gov.au");
+    }),
+  );
+
+  it.effect("adds the nested cause to the fetch error message", () =>
+    Effect.gen(function* () {
+      const offline = Layer.succeed(
+        HttpClient.HttpClient,
+        HttpClient.make((request) =>
+          Effect.fail(
+            new HttpClientError.HttpClientError({
+              reason: new HttpClientError.TransportError({
+                request,
+                cause: new TypeError("fetch failed", {
+                  cause: new Error("getaddrinfo ENOTFOUND abs.gov.au"),
+                }),
+              }),
+            }),
+          ),
+        ),
+      );
+
+      const error = yield* readAbs(AbsRequest.Catalogue({ catalogueNumber: "1234.0" })).pipe(
+        Effect.flip,
+        Effect.provide(offline),
+      );
+
+      expect(error._tag).toBe("AbsUnavailable");
+      expect(error).toHaveProperty("detail", "fetch failed: getaddrinfo ENOTFOUND abs.gov.au");
     }),
   );
 });

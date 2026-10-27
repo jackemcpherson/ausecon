@@ -1,15 +1,17 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Schema } from "effect";
-
-import { AbsRequest, SeriesId, SeriesNotFound, readAbs } from "../src/index";
+import { Effect } from "effect";
 import {
   type RecordedResponse,
   WAGE_PRICE_INDEX_RELEASE,
   directoryUrl,
   fixtureHttpClient,
   recorded,
-} from "./fixture-http-client";
-import { type SyntheticSeries, absDataSheet, syntheticTable } from "./synthetic-table";
+  type SyntheticSeries,
+  absDataSheet,
+  syntheticTable,
+} from "@ausecon/testkit";
+
+import { AbsRequest, type Series, SeriesNotFound, readAbs } from "../src/index";
 
 const MODELLERS_DATABASE_RELEASE =
   "https://www.abs.gov.au/statistics/economy/national-accounts/modellers-database/latest-release/";
@@ -43,27 +45,27 @@ const sidResponse = (seriesId: string, tableUrl: string): RecordedResponse => ({
   body: `<?xml version="1.0" encoding="utf-8" ?><TimeSeriesIndex><Series><ProductReleaseDate>15/04/2026</ProductReleaseDate><TableURL>${tableUrl}</TableURL><TableTitle>Table 1. Synthetic</TableTitle><TableOrder>1</TableOrder><SeriesID>${seriesId}</SeriesID></Series></TimeSeriesIndex>`,
 });
 
-const countBySeries = (observations: ReadonlyArray<{ readonly seriesId: string }>) =>
-  Object.fromEntries(
-    [...Map.groupBy(observations, (observation) => observation.seriesId)].map(
-      ([seriesId, group]) => [seriesId, group.length],
-    ),
-  );
+/** The observation count of each Series, by series ID. */
+const countBySeries = (series: ReadonlyArray<Series>) =>
+  Object.fromEntries(series.map(({ seriesId, observations }) => [seriesId, observations.length]));
+
+/** The distinct table IDs of the Series. */
+const tableIdsOf = (series: ReadonlyArray<Series>) =>
+  new Set(series.map(({ table }) => table.tableId));
 
 describe("readAbs for series IDs", () => {
   it.effect("returns only the requested series from two catalogue numbers", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(seriesResponses());
 
-      const observations = yield* readAbs(
+      const series = yield* readAbs(
         AbsRequest.Series({ seriesIds: ["A2603039T", "A2454446F"] }),
       ).pipe(Effect.provide(http.layer));
 
       // `NoObs` in the recorded Time Series Directory rows.
-      expect(countBySeries(observations)).toEqual({ A2603039T: 116, A2454446F: 268 });
-      expect(new Set(observations.map((observation) => observation.tableId))).toEqual(
-        new Set(["634501", "1364015003"]),
-      );
+      expect(countBySeries(series)).toEqual({ A2603039T: 116, A2454446F: 268 });
+      expect(series).toHaveLength(2);
+      expect(tableIdsOf(series)).toEqual(new Set(["634501", "1364015003"]));
     }),
   );
 
@@ -71,16 +73,81 @@ describe("readAbs for series IDs", () => {
     Effect.gen(function* () {
       const http = fixtureHttpClient(seriesResponses());
 
-      const observations = yield* readAbs(AbsRequest.Series({ seriesIds: ["A2603039T"] })).pipe(
+      const series = yield* readAbs(AbsRequest.Series({ seriesIds: ["A2603039T"] })).pipe(
         Effect.provide(http.layer),
       );
 
       // The recorded `sid` response lists 634501, 634503b, 634505b, and
       // 63450table2bto9b; 634501 has the lowest `TableOrder`.
-      expect(countBySeries(observations)).toEqual({ A2603039T: 116 });
-      expect(new Set(observations.map((observation) => observation.tableId))).toEqual(
-        new Set(["634501"]),
+      expect(countBySeries(series)).toEqual({ A2603039T: 116 });
+      expect(series).toHaveLength(1);
+      expect(tableIdsOf(series)).toEqual(new Set(["634501"]));
+    }),
+  );
+
+  it.effect("reads a series from its lowest table order when the Directory lists it later", () =>
+    Effect.gen(function* () {
+      const firstUrl = "https://www.abs.gov.au/synthetic/latest-release/123401.xlsx";
+      const thirdUrl = "https://www.abs.gov.au/synthetic/latest-release/123403.xlsx";
+
+      const row = (tableUrl: string, tableOrder: number) =>
+        `<Series><ProductReleaseDate>15/04/2026</ProductReleaseDate><TableURL>${tableUrl}</TableURL><TableTitle>Table ${tableOrder}. Synthetic</TableTitle><TableOrder>${tableOrder}</TableOrder><SeriesID>A1000001A</SeriesID></Series>`;
+
+      const table = (value: number): RecordedResponse => ({
+        status: 200,
+        body: syntheticTable([
+          ["Data1", absDataSheet([syntheticSeries("A1000001A")], [[46023, value]])],
+        ]),
+      });
+
+      const http = fixtureHttpClient(
+        new Map<string, RecordedResponse>([
+          [
+            directoryUrl({ sid: "A1000001A" }),
+            {
+              status: 200,
+              body: `<?xml version="1.0" encoding="utf-8" ?><TimeSeriesIndex>${row(thirdUrl, 3)}${row(firstUrl, 1)}</TimeSeriesIndex>`,
+            },
+          ],
+          [firstUrl, table(1)],
+          [thirdUrl, table(3)],
+        ]),
       );
+
+      const series = yield* readAbs(AbsRequest.Series({ seriesIds: ["A1000001A"] })).pipe(
+        Effect.provide(http.layer),
+      );
+
+      expect(
+        series.map(({ table, observations }) => [table.tableId, observations[0]?.value]),
+      ).toEqual([["123401", 1]]);
+    }),
+  );
+
+  it.effect("names a table by its file name without a query", () =>
+    Effect.gen(function* () {
+      const tableUrl = "https://www.abs.gov.au/synthetic/latest-release/6345001.xlsx?v=2.1";
+
+      const http = fixtureHttpClient(
+        new Map<string, RecordedResponse>([
+          [directoryUrl({ sid: "A1000001A" }), sidResponse("A1000001A", tableUrl)],
+          [
+            tableUrl,
+            {
+              status: 200,
+              body: syntheticTable([
+                ["Data1", absDataSheet([syntheticSeries("A1000001A")], [[46023, 1]])],
+              ]),
+            },
+          ],
+        ]),
+      );
+
+      const series = yield* readAbs(AbsRequest.Series({ seriesIds: ["A1000001A"] })).pipe(
+        Effect.provide(http.layer),
+      );
+
+      expect(series.map(({ table }) => table.tableId)).toEqual(["6345001"]);
     }),
   );
 
@@ -88,11 +155,11 @@ describe("readAbs for series IDs", () => {
     Effect.gen(function* () {
       const http = fixtureHttpClient(seriesResponses());
 
-      const observations = yield* readAbs(
+      const series = yield* readAbs(
         AbsRequest.Series({ seriesIds: ["A2603039T", "A2713846W"] }),
       ).pipe(Effect.provide(http.layer));
 
-      expect(countBySeries(observations)).toEqual({ A2603039T: 116, A2713846W: 116 });
+      expect(countBySeries(series)).toEqual({ A2603039T: 116, A2713846W: 116 });
       expect(http.requests.map((request) => request.url).toSorted()).toEqual([
         directoryUrl({ sid: "A2603039T" }),
         directoryUrl({ sid: "A2713846W" }),
@@ -129,26 +196,68 @@ describe("readAbs for series IDs", () => {
         ]),
       );
 
-      const observations = yield* readAbs(
+      const series = yield* readAbs(
         AbsRequest.Series({ seriesIds: ["A1000001A", "A1000002B"] }),
       ).pipe(Effect.provide(http.layer));
 
-      expect(observations.map(({ seriesId, value }) => [seriesId, value])).toEqual([
+      expect(
+        series.map(({ seriesId, observations }) => [seriesId, observations[0]?.value]),
+      ).toEqual([
         ["A1000001A", 1],
         ["A1000002B", 2],
       ]);
     }),
   );
 
+  it.effect(
+    "titles a series from the latest release when an older one has a lower table order",
+    () =>
+      Effect.gen(function* () {
+        const tableUrl = "https://www.abs.gov.au/synthetic/latest-release/123401.xlsx";
+
+        const row = (releaseDate: string, title: string, tableOrder: number) =>
+          `<Series><ProductReleaseDate>${releaseDate}</ProductReleaseDate><TableURL>${tableUrl}</TableURL><TableTitle>${title}</TableTitle><TableOrder>${tableOrder}</TableOrder><SeriesID>A1000001A</SeriesID></Series>`;
+
+        const http = fixtureHttpClient(
+          new Map<string, RecordedResponse>([
+            [
+              directoryUrl({ sid: "A1000001A" }),
+              {
+                status: 200,
+                body: `<?xml version="1.0" encoding="utf-8" ?><TimeSeriesIndex>${row("15/01/2026", "Table 1. Superseded", 1)}${row("15/04/2026", "Table 1. Current", 2)}</TimeSeriesIndex>`,
+              },
+            ],
+            [
+              tableUrl,
+              {
+                status: 200,
+                body: syntheticTable([
+                  ["Data1", absDataSheet([syntheticSeries("A1000001A")], [[46023, 1]])],
+                ]),
+              },
+            ],
+          ]),
+        );
+
+        const series = yield* readAbs(AbsRequest.Series({ seriesIds: ["A1000001A"] })).pipe(
+          Effect.provide(http.layer),
+        );
+
+        expect(series.map(({ table }) => table)).toEqual([
+          { tableId: "123401", tableTitle: "Table 1. Current" },
+        ]);
+      }),
+  );
+
   it.effect("upper-cases lower-case series IDs", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(seriesResponses());
 
-      const observations = yield* readAbs(AbsRequest.Series({ seriesIds: ["a2454446f"] })).pipe(
+      const series = yield* readAbs(AbsRequest.Series({ seriesIds: ["a2454446f"] })).pipe(
         Effect.provide(http.layer),
       );
 
-      expect(countBySeries(observations)).toEqual({ A2454446F: 268 });
+      expect(countBySeries(series)).toEqual({ A2454446F: 268 });
     }),
   );
 
@@ -160,14 +269,39 @@ describe("readAbs for series IDs", () => {
         AbsRequest.Series({ seriesIds: ["A2325807L", "A2603039T", "Z9999999Z"] }),
       ).pipe(Effect.flip, Effect.provide(http.layer));
 
-      expect(error).toEqual(
-        new SeriesNotFound({
-          seriesIds: ["A2325807L", "Z9999999Z"].map((seriesId) =>
-            Schema.decodeSync(SeriesId)(seriesId),
-          ),
-        }),
-      );
+      expect(error).toBeInstanceOf(SeriesNotFound);
+      expect(error).toHaveProperty("seriesIds", ["A2325807L", "Z9999999Z"]);
       expect(http.requests.some((request) => request.url.endsWith(".xlsx"))).toBe(false);
+    }),
+  );
+
+  it.effect("downloads no table when one series ID is unknown", () =>
+    Effect.gen(function* () {
+      const http = fixtureHttpClient(seriesResponses());
+
+      const error = yield* readAbs(
+        AbsRequest.Series({ seriesIds: ["A2603039T", "Z9999999Z"] }),
+      ).pipe(Effect.flip, Effect.provide(http.layer));
+
+      expect(error).toBeInstanceOf(SeriesNotFound);
+      expect(error).toHaveProperty("seriesIds", ["Z9999999Z"]);
+      expect(http.requests.some((request) => request.url.endsWith(".xlsx"))).toBe(false);
+    }),
+  );
+
+  it.effect("looks up a repeated unknown series ID once and names it once", () =>
+    Effect.gen(function* () {
+      const http = fixtureHttpClient(seriesResponses());
+
+      const error = yield* readAbs(
+        AbsRequest.Series({ seriesIds: ["Z9999999Z", "Z9999999Z"] }),
+      ).pipe(Effect.flip, Effect.provide(http.layer));
+
+      expect(error).toBeInstanceOf(SeriesNotFound);
+      expect(error).toHaveProperty("seriesIds", ["Z9999999Z"]);
+      expect(http.requests.map((request) => request.url)).toEqual([
+        directoryUrl({ sid: "Z9999999Z" }),
+      ]);
     }),
   );
 });

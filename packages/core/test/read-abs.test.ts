@@ -1,8 +1,21 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
+import {
+  directoryUrl,
+  fixtureBytes,
+  fixtureHttpClient,
+  recorded,
+  wagePriceIndexResponses,
+} from "@ausecon/testkit";
 
-import { AbsRequest, CatalogueNotFound, CatalogueNumber, readAbs } from "../src/index";
-import { directoryUrl, fixtureBytes, fixtureHttpClient, recorded } from "./fixture-http-client";
+import {
+  AbsRequest,
+  CatalogueNotFound,
+  CatalogueNumber,
+  TableId,
+  parseTable,
+  readAbs,
+} from "../src/index";
 
 const readCatalogueWithDirectoryBody = (body: string) => {
   const http = fixtureHttpClient(
@@ -104,14 +117,35 @@ describe("readAbs Time Series Directory lookup", () => {
   ];
 
   for (const [name, body, message] of undecodableBodies) {
-    it.effect(`fails with an HttpClientError decode error for ${name}`, () =>
+    it.effect(`fails with TimeSeriesDirectoryError for ${name}`, () =>
       Effect.gen(function* () {
         const error = yield* readCatalogueWithDirectoryBody(body);
 
-        expect(error._tag).toBe("HttpClientError");
-        expect(error).toHaveProperty("reason._tag", "DecodeError");
-        expect(error.message).toContain(message);
+        expect(error._tag).toBe("TimeSeriesDirectoryError");
+        expect(error).toHaveProperty("url", directoryUrl({ catno: "6345.0" }));
+        expect(error).toHaveProperty("reason", expect.stringContaining(message));
       }),
     );
   }
+});
+
+describe("readAbs and parseTable", () => {
+  it.effect("give the same series for a recorded table, apart from its title", () =>
+    Effect.gen(function* () {
+      const http = fixtureHttpClient(wagePriceIndexResponses());
+
+      const read = yield* readAbs(
+        AbsRequest.Catalogue({ catalogueNumber: "6345.0", tableNumbers: ["1"] }),
+      ).pipe(Effect.provide(http.layer));
+
+      const parsed = yield* parseTable(fixtureBytes("634501.xlsx"), {
+        tableId: Schema.decodeSync(TableId)("634501"),
+      });
+
+      expect(read.length).toBeGreaterThan(0);
+      expect(parsed).toEqual(
+        read.map((series) => ({ ...series, table: { tableId: series.table.tableId } })),
+      );
+    }),
+  );
 });

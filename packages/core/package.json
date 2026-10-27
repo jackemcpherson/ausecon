@@ -1,6 +1,6 @@
 {
   "name": "@ausecon/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Read Australian economic data from the ABS and RBA.",
   "license": "MIT",
   "repository": {
@@ -26,6 +26,9 @@
     "effect": "4.0.6",
     "fast-xml-parser": "5.11.2",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "@ausecon/testkit": "workspace:*"
   },
   "engines": {
     "node": ">=22.18.0"

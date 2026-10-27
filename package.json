@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "check": "vp check",
-    "typecheck": "tsc -p packages/core && tsc -p packages/core/test && tsc -p packages/cli && tsc -p tsconfig.node.json",
+    "typecheck": "tsc -p packages/core && tsc -p packages/core/test && tsc -p packages/cli && tsc -p packages/testkit && tsc -p tsconfig.node.json",
     "test": "vp test",
     "build": "vp run -r build",
     "docs:check": "rumdl check --deny-config-warnings . && vale --no-global ."

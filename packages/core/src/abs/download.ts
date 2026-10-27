@@ -1,51 +1,40 @@
 import { Effect } from "effect";
-import type { HttpClient, HttpClientError } from "effect/http";
+import type { HttpClient } from "effect/http";
 
-import type { Observation, WorkbookLayoutError } from "../types";
-import { absHttpClient } from "./http";
-import type { DirectoryTable } from "./latest-release";
+import type { AbsUnavailable, Series, TableLayoutError, TimeSeriesDirectoryError } from "../types";
+import { ABS_CONCURRENCY, fetchBytes } from "./http";
 import { parseTable } from "./table-parse";
+import type { Tables } from "./time-series-directory";
 
-/** The most tables downloaded at once. */
-const DOWNLOAD_CONCURRENCY = 4;
+/** The Series of one downloaded table, and the table URL it came from. */
+export interface TableSeries {
+  readonly tableUrl: string;
+  readonly series: ReadonlyArray<Series>;
+}
 
 /**
  * Download and parse tables.
  *
- * Downloads each distinct `TableURL` once, with a concurrency limit, after
- * replacing spaces in the URL with `+`.
+ * Downloads each table URL once, under the concurrency limit, after replacing
+ * spaces in the URL with `+`.
  *
- * @param tables - The tables to read.
- * @param isWanted - Whether to keep an observation of a table.
- * @returns An Effect that yields the kept observations of every table, in
- * table order.
+ * @param tables - The tables to read, by table URL.
+ * @returns An Effect that yields the Series of each table, in table order.
  */
 export const readTables: (
-  tables: ReadonlyArray<DirectoryTable>,
-  isWanted: (table: DirectoryTable, observation: Observation) => boolean,
+  tables: Tables,
 ) => Effect.Effect<
-  ReadonlyArray<Observation>,
-  WorkbookLayoutError | HttpClientError.HttpClientError,
+  ReadonlyArray<TableSeries>,
+  TableLayoutError | TimeSeriesDirectoryError | AbsUnavailable,
   HttpClient.HttpClient
-> = Effect.fn("readTables")(function* (
-  tables: ReadonlyArray<DirectoryTable>,
-  isWanted: (table: DirectoryTable, observation: Observation) => boolean,
-) {
-  const client = yield* absHttpClient;
-  const distinct = [...new Map(tables.map((table) => [table.tableUrl, table])).values()];
-
-  const tableObservations = yield* Effect.forEach(
-    distinct,
-    (table) =>
-      client.get(table.tableUrl.replaceAll(" ", "+")).pipe(
-        Effect.flatMap((response) => response.arrayBuffer),
-        Effect.flatMap((body) => parseTable(new Uint8Array(body), table)),
-        Effect.map((observations) =>
-          observations.filter((observation) => isWanted(table, observation)),
-        ),
+> = Effect.fn("readTables")(function* (tables: Tables) {
+  return yield* Effect.forEach(
+    tables,
+    ([tableUrl, table]) =>
+      fetchBytes(tableUrl.replaceAll(" ", "+")).pipe(
+        Effect.flatMap((body) => parseTable(body, table)),
+        Effect.map((series) => ({ tableUrl, series })),
       ),
-    { concurrency: DOWNLOAD_CONCURRENCY },
+    { concurrency: ABS_CONCURRENCY },
   );
-
-  return tableObservations.flat();
 });

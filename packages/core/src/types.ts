@@ -96,46 +96,53 @@ export const DecodedAbsRequest = Schema.Union([CatalogueRequest, SeriesRequest])
 export type DecodedAbsRequest = typeof DecodedAbsRequest.Type;
 
 /**
- * Options for a read.
+ * One table of a release: its table ID and, when known, its ABS title.
  *
- * Set `hasMetadata` to `false` to return only series ID, date, and value.
+ * Table IDs are not unique: two tables in different releases can share a file
+ * name and so a table ID. The library tells them apart by table URL internally.
  */
-export interface ReadOptions {
-  readonly hasMetadata?: boolean;
-}
+export const Table = Schema.Struct({
+  tableId: TableId,
+  tableTitle: Schema.optionalKey(Schema.String),
+});
+
+/** One table of a release. */
+export type Table = typeof Table.Type;
 
 /**
- * One value of a series for one period, with the series metadata.
+ * One value of a series for one period.
  *
- * The fields are the 12 `readabs` columns in camelCase, in the same order.
+ * `date` is an ISO `YYYY-MM-DD` string, so time zones never shift a period.
  */
 export const Observation = Schema.Struct({
-  tableId: TableId,
-  sheet: Schema.String,
-  tableTitle: Schema.String,
   date: Schema.String,
-  seriesDescription: Schema.String,
   value: Schema.Number,
-  seriesType: Schema.String,
-  dataType: Schema.String,
-  collectionMonth: Schema.String,
-  frequency: Schema.String,
-  seriesId: Schema.String,
-  unit: Schema.String,
 });
 
-/** One value of a series for one period, with the series metadata. */
+/** One value of a series for one period. */
 export type Observation = typeof Observation.Type;
 
-/** One value of a series for one period, without the series metadata. */
-export const ObservationValue = Schema.Struct({
-  seriesId: Schema.String,
-  date: Schema.String,
-  value: Schema.Number,
+/**
+ * One sequence of observations of one measure, read from one sheet of a table.
+ *
+ * The metadata fields come from the rows above the observations. The
+ * observations come in row order.
+ */
+export const Series = Schema.Struct({
+  seriesId: SeriesId,
+  seriesDescription: Schema.String,
+  unit: Schema.String,
+  seriesType: Schema.String,
+  dataType: Schema.String,
+  frequency: Schema.String,
+  collectionMonth: Schema.String,
+  table: Table,
+  sheet: Schema.String,
+  observations: Schema.Array(Observation),
 });
 
-/** One value of a series for one period, without the series metadata. */
-export type ObservationValue = typeof ObservationValue.Type;
+/** One sequence of observations of one measure, read from one sheet of a table. */
+export type Series = typeof Series.Type;
 
 /**
  * The request input failed schema decoding.
@@ -163,22 +170,45 @@ export class TableNotFound extends Schema.TaggedError<TableNotFound>()("TableNot
 }) {}
 
 /**
- * The Time Series Directory has no record of one or more requested series.
+ * One or more requested series are missing: the Time Series Directory has no
+ * record of them, or the table it names does not hold them.
  */
 export class SeriesNotFound extends Schema.TaggedError<SeriesNotFound>()("SeriesNotFound", {
   seriesIds: Schema.Array(SeriesId),
 }) {}
 
 /**
+ * A request to the ABS got no response, or a status outside 2xx.
+ *
+ * `status` is present when the ABS answered. `detail` describes the failure
+ * as text, such as the status or the network error.
+ */
+export class AbsUnavailable extends Schema.TaggedError<AbsUnavailable>()("AbsUnavailable", {
+  url: Schema.String,
+  status: Schema.optionalKey(Schema.Number),
+  detail: Schema.String,
+}) {}
+
+/**
+ * A Time Series Directory fault: a response that is not a series index, such
+ * as an error document, malformed XML, or an unexpected layout, or a table URL
+ * that cannot be requested.
+ */
+export class TimeSeriesDirectoryError extends Schema.TaggedError<TimeSeriesDirectoryError>()(
+  "TimeSeriesDirectoryError",
+  {
+    url: Schema.String,
+    reason: Schema.String,
+  },
+) {}
+
+/**
  * A table does not have the ABS time series layout.
  *
  * `sheet` is absent when the table cannot be opened as `.xlsx` at all.
  */
-export class WorkbookLayoutError extends Schema.TaggedError<WorkbookLayoutError>()(
-  "WorkbookLayoutError",
-  {
-    tableId: TableId,
-    sheet: Schema.optionalKey(Schema.String),
-    reason: Schema.String,
-  },
-) {}
+export class TableLayoutError extends Schema.TaggedError<TableLayoutError>()("TableLayoutError", {
+  tableId: TableId,
+  sheet: Schema.optionalKey(Schema.String),
+  reason: Schema.String,
+}) {}

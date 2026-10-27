@@ -8,8 +8,8 @@ The parser keeps every value as a string (`parseTagValue: false`), so values
 such as `6345.0` and `001` survive. It always reads `Series` as a list, because
 a page with one series would otherwise parse to a single object. A `Schema`
 decodes the parsed object at the boundary. An `<Error>` document, which the
-Time Series Directory returns with HTTP 200, fails the read with an
-`HttpClientError` whose reason is `DecodeError`.
+Time Series Directory returns with HTTP 200, fails the read with
+`TimeSeriesDirectoryError`, as ADR 0007 records.
 
 ## Latest Release
 

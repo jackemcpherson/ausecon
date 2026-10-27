@@ -5,9 +5,56 @@ packages share one version number.
 
 ---
 
-## Unreleased
+## 0.2.0 - 2026-10-27
 
-No changes yet.
+This release returns series from `readAbs` and breaks the 0.1.0 interface.
+CSV output and exit codes 2 and 3 do not change.
+
+### Added
+
+- `parseTable` in `@ausecon/core` reads the series of one ABS time series
+  table from its `.xlsx` bytes and a `Table`, with the table ID required and
+  the title optional. It is the parser `readAbs` uses, and it fails with
+  `TableLayoutError` for a table without the ABS time series layout.
+
+### Changed
+
+- `readAbs` returns a read-only array of `Series`, one per series ID and
+  sheet, in place of one observation per series and period. Each `Series`
+  carries its metadata once, its `Table` (`tableId` and an optional
+  `tableTitle`), its sheet, and its observations as `date` and `value` pairs.
+  A series request returns only the requested series.
+- A series request fails with `SeriesNotFound` when the table that the Time
+  Series Directory names for a series ID does not hold it. In 0.1.0 the read
+  dropped the series, and `ausecon` wrote only a header and exited 0. It now
+  exits 3.
+- A column with a series ID in row 10 but no number cells now yields a
+  `Series` with empty `observations`. In 0.1.0 it yielded nothing. JSON
+  output shows such a series. CSV output does not change, because the series
+  has no rows.
+- `Series.seriesId` is the branded `SeriesId`, the same type as
+  `SeriesNotFound.seriesIds`. A table whose row 10 holds text that is not a
+  series ID fails with `TableLayoutError`.
+- `readAbs` takes one argument. This release removes the options argument,
+  `hasMetadata`, `ReadOptions`, and `ObservationValue`.
+- `@ausecon/core` no longer exports the decoded request schemas
+  `CatalogueRequest`, `SeriesRequest`, and `DecodedAbsRequest`.
+- `ausecon abs get --format json` writes the list of series as `readAbs`
+  returns it. With `--no-metadata`, each series holds only its series ID and
+  observations. CSV output does not change.
+- `WorkbookLayoutError` is now `TableLayoutError`, with the same fields.
+- `AbsUnavailable` replaces Effect's `HttpClientError`. It carries the URL,
+  the status if the ABS answered, and the cause as text in `detail`.
+  `ReadAbsError` holds only errors the library defines.
+- A Time Series Directory response that is not a series index fails with
+  `TimeSeriesDirectoryError`, which names the URL and the reason. An error
+  document is one such response. It no longer fails as an HTTP decode error.
+  A table URL that the library cannot request fails the same way, not as an
+  unavailable ABS.
+- `ausecon` exits 1, not 4, when the Time Series Directory answers with an
+  error document, and asks for a report. It does the same for a listed table
+  URL that it cannot request. Exit 4 names the URL. Without a
+  status it points at the network. With one it suggests trying later.
 
 ## 0.1.0 - 2026-10-27
 

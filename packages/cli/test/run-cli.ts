@@ -1,7 +1,7 @@
 import { ConfigProvider, Effect, Layer, Stdio } from "effect";
-import type { HttpClient } from "effect/http";
 import { TestConsole } from "effect/testing";
 
+import type { AbsReader } from "../src/reader";
 import { runAusecon } from "../src/run";
 import { CliTestLayer } from "./cli-test-layer";
 
@@ -22,7 +22,7 @@ export interface CliEnvironment {
  * Run `ausecon` in process with captured output.
  *
  * @param argv - The arguments after `ausecon`.
- * @param http - The `HttpClient` layer that serves the requests.
+ * @param reader - The reader layer that answers the read.
  * @param environment - Whether stdout and stderr are terminals, and the
  * environment variables. Neither is a terminal by default, and no variable is
  * set.
@@ -30,7 +30,7 @@ export interface CliEnvironment {
  */
 export const runCli = (
   argv: ReadonlyArray<string>,
-  http: Layer.Layer<HttpClient.HttpClient>,
+  reader: Layer.Layer<AbsReader>,
   environment: CliEnvironment = {},
 ): Effect.Effect<CliRun> =>
   Effect.gen(function* () {
@@ -43,7 +43,7 @@ export const runCli = (
     // The inner layers replace the `Stdio` service of `CliTestLayer`.
     Effect.provide(
       Layer.mergeAll(
-        http,
+        reader,
         Stdio.layerTest({
           stdoutIsTerminal: Effect.succeed(environment.isTerminal ?? false),
           stderrIsTerminal: Effect.succeed(environment.isTerminal ?? false),

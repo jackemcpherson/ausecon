@@ -1,158 +1,245 @@
-import { describe, expect, it } from "@effect/vitest";
-import { Effect, Layer } from "effect";
-import { HttpClient, HttpClientError } from "effect/http";
-
 import {
-  type RecordedResponse,
-  WAGE_PRICE_INDEX_RELEASE,
-  directoryUrl,
-  fixtureHttpClient,
-  recorded,
-  wagePriceIndexResponses,
-} from "../../../core/test/fixture-http-client";
-import { absDataSheet, syntheticTable } from "../../../core/test/synthetic-table";
+  AbsRequest,
+  AbsUnavailable,
+  CatalogueNotFound,
+  CatalogueNumber,
+  InvalidRequest,
+  type ReadAbsError,
+  Series,
+  SeriesId,
+  SeriesNotFound,
+  TableId,
+  TableLayoutError,
+  TableNotFound,
+  TableNumber,
+  TimeSeriesDirectoryError,
+} from "@ausecon/core";
+import { describe, expect, it } from "@effect/vitest";
+import { Effect, Schema } from "effect";
+
+import { fakeReader, noReads } from "../fake-reader";
 import { runCli } from "../run-cli";
+
+const TABLE_1_TITLE =
+  "Table 1. Total Hourly Rates of Pay Excluding Bonuses: Sector, Original, Seasonally Adjusted and Trend";
+
+/** A Series with a table title that holds commas, as the Time Series Directory names it. */
+const WAGES = Schema.decodeSync(Series)({
+  seriesId: "A2603039T",
+  seriesDescription: "Quarterly Index ;  Total hourly rates of pay excluding bonuses ;",
+  unit: "Index Numbers",
+  seriesType: "Original",
+  dataType: "INDEX",
+  frequency: "Quarter",
+  collectionMonth: "3",
+  table: { tableId: "634501", tableTitle: TABLE_1_TITLE },
+  sheet: "Data1",
+  observations: [
+    { date: "1997-09-01", value: 67.4 },
+    { date: "1997-12-01", value: 68 },
+  ],
+});
+
+/** A Series from a table with no title, as the public parser can return it. */
+const LOCAL = Schema.decodeSync(Series)({
+  seriesId: "A1000001A",
+  seriesDescription: "Employed persons ;",
+  unit: "000",
+  seriesType: "Trend",
+  dataType: "STOCK",
+  frequency: "Month",
+  collectionMonth: "1",
+  table: { tableId: "6202001" },
+  sheet: "Data2",
+  observations: [{ date: "2026-01-01", value: -1.5 }],
+});
 
 const METADATA_HEADER =
   "tableId,sheet,tableTitle,date,seriesDescription,value,seriesType,dataType,collectionMonth,frequency,seriesId,unit";
 
-// Checked by hand against cells A11, B1 to B11 of 634501.xlsx sheet Data1. The
-// table title holds commas, so CSV quotes it.
-const FIRST_METADATA_ROW =
-  '634501,Data1,"Table 1. Total Hourly Rates of Pay Excluding Bonuses: Sector, Original, Seasonally Adjusted and Trend",1997-09-01,Quarterly Index ;  Total hourly rates of pay excluding bonuses ;  Australia ;  Private ;  All industries ;,67.4,Original,INDEX,3,Quarter,A2603039T,Index Numbers';
-
-// The library returns 73,357 observations for the recorded 6345.0 release.
-const OBSERVATION_COUNT = 73_357;
-
-const TABLE_1_URL = `${WAGE_PRICE_INDEX_RELEASE}634501.xlsx`;
-
-const MODELLERS_DATABASE_TABLE_URL =
-  "https://www.abs.gov.au/statistics/economy/national-accounts/modellers-database/latest-release/1364015003.xlsx";
-
-/** Recorded `sid` responses for two series from two catalogue numbers, and their tables. */
-const seriesResponses = (): ReadonlyMap<string, RecordedResponse> =>
-  new Map([
-    [directoryUrl({ sid: "A2603039T" }), recorded("sid-A2603039T.xml")],
-    [directoryUrl({ sid: "A2454446F" }), recorded("sid-A2454446F.xml")],
-    [TABLE_1_URL, recorded("634501.xlsx")],
-    [MODELLERS_DATABASE_TABLE_URL, recorded("1364015003.xlsx")],
-  ]);
+const ISSUES = "https://github.com/jackemcpherson/ausecon/issues";
 
 const ANSI_ESCAPE = "\u001B[";
 
-/** The recorded 6345.0 responses with one response replaced. */
-const wagePriceIndexWith = (
-  url: string,
-  response: RecordedResponse,
-): ReadonlyMap<string, RecordedResponse> =>
-  new Map([...wagePriceIndexResponses(), [url, response]]);
+const reading = (series: ReadonlyArray<Series>) => fakeReader(Effect.succeed(series));
 
-const noRequests = fixtureHttpClient(new Map());
-
-describe("ausecon abs get --catalogue", () => {
-  it.effect("writes every observation as CSV with a header row by default", () =>
+describe("ausecon abs get output", () => {
+  it.effect("writes one CSV row per observation with a header row by default", () =>
     Effect.gen(function* () {
-      const http = fixtureHttpClient(wagePriceIndexResponses());
-
-      const result = yield* runCli(["abs", "get", "--catalogue", "6345.0"], http.layer);
-      const lines = result.stdout.split("\n");
+      const result = yield* runCli(
+        ["abs", "get", "--catalogue", "6345.0"],
+        reading([WAGES, LOCAL]).layer,
+      );
 
       expect(result.exitCode).toBe(0);
       expect(result.stderr).toBe("");
-      expect(lines[0]).toBe(METADATA_HEADER);
-      expect(lines[1]).toBe(FIRST_METADATA_ROW);
-      expect(lines).toHaveLength(OBSERVATION_COUNT + 1);
+      expect(result.stdout.split("\n")).toEqual([
+        METADATA_HEADER,
+        `634501,Data1,"${TABLE_1_TITLE}",1997-09-01,Quarterly Index ;  Total hourly rates of pay excluding bonuses ;,67.4,Original,INDEX,3,Quarter,A2603039T,Index Numbers`,
+        `634501,Data1,"${TABLE_1_TITLE}",1997-12-01,Quarterly Index ;  Total hourly rates of pay excluding bonuses ;,68,Original,INDEX,3,Quarter,A2603039T,Index Numbers`,
+        "6202001,Data2,,2026-01-01,Employed persons ;,-1.5,Trend,STOCK,1,Month,A1000001A,000",
+      ]);
     }),
   );
 
-  it.effect("quotes a CSV field that holds a line break", () =>
+  it.effect("writes only the header when the read returns no Series", () =>
     Effect.gen(function* () {
-      const http = fixtureHttpClient(
-        wagePriceIndexWith(TABLE_1_URL, {
-          status: 200,
-          body: syntheticTable([
-            [
-              "Data1",
-              absDataSheet(
-                [
-                  {
-                    description: "First line ;\nsecond line ;",
-                    unit: "Number",
-                    seriesType: "Original",
-                    dataType: "FLOW",
-                    frequency: "Month",
-                    collectionMonth: 1,
-                    seriesId: "A1000001A",
-                  },
-                ],
-                [[46023, 1]],
-              ),
-            ],
-          ]),
-        }),
-      );
-
-      const result = yield* runCli(["abs", "get", "--catalogue", "6345.0"], http.layer);
+      const result = yield* runCli(["abs", "get", "--catalogue", "6345.0"], reading([]).layer);
 
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain(',"First line ;\nsecond line ;",1,');
+      expect(result.stdout).toBe(METADATA_HEADER);
     }),
+  );
+
+  it.effect("quotes a CSV field that holds a quote or a line break", () =>
+    Effect.gen(function* () {
+      const awkward = { ...LOCAL, seriesDescription: 'First "line" ;\nsecond line ;' };
+
+      const result = yield* runCli(
+        ["abs", "get", "--catalogue", "6202.0"],
+        reading([awkward]).layer,
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toBe(
+        `${METADATA_HEADER}\n` +
+          '6202001,Data2,,2026-01-01,"First ""line"" ;\nsecond line ;",-1.5,Trend,STOCK,1,Month,A1000001A,000',
+      );
+    }),
+  );
+
+  it.effect(
+    "quotes a CSV field whose only special character is a line feed or carriage return",
+    () =>
+      Effect.gen(function* () {
+        const result = yield* runCli(
+          ["abs", "get", "--catalogue", "6202.0"],
+          reading([
+            { ...LOCAL, seriesDescription: "first\nsecond" },
+            { ...LOCAL, seriesDescription: "first\rsecond" },
+          ]).layer,
+        );
+
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toBe(
+          `${METADATA_HEADER}\n` +
+            '6202001,Data2,,2026-01-01,"first\nsecond",-1.5,Trend,STOCK,1,Month,A1000001A,000\n' +
+            '6202001,Data2,,2026-01-01,"first\rsecond",-1.5,Trend,STOCK,1,Month,A1000001A,000',
+        );
+      }),
   );
 
   it.effect("writes only series ID, date, and value with --no-metadata", () =>
     Effect.gen(function* () {
-      const http = fixtureHttpClient(wagePriceIndexResponses());
-
       const result = yield* runCli(
         ["abs", "get", "--catalogue", "6345.0", "--no-metadata"],
-        http.layer,
+        reading([WAGES, LOCAL]).layer,
       );
 
-      const lines = result.stdout.split("\n");
-
       expect(result.exitCode).toBe(0);
-      expect(lines.slice(0, 2)).toEqual(["seriesId,date,value", "A2603039T,1997-09-01,67.4"]);
-      expect(lines).toHaveLength(OBSERVATION_COUNT + 1);
+      expect(result.stdout.split("\n")).toEqual([
+        "seriesId,date,value",
+        "A2603039T,1997-09-01,67.4",
+        "A2603039T,1997-12-01,68",
+        "A1000001A,2026-01-01,-1.5",
+      ]);
     }),
   );
 
-  it.effect("writes one compact JSON array when stdout is not a terminal", () =>
+  it.effect("writes the Series list as compact JSON when stdout is not a terminal", () =>
     Effect.gen(function* () {
-      const http = fixtureHttpClient(wagePriceIndexResponses());
-
       const result = yield* runCli(
-        ["abs", "get", "--catalogue", "6345.0", "--format", "json", "--no-metadata"],
-        http.layer,
+        ["abs", "get", "--catalogue", "6345.0", "--format", "json"],
+        reading([WAGES, LOCAL]).layer,
       );
+
+      const series: unknown = JSON.parse(result.stdout);
 
       expect(result.exitCode).toBe(0);
       expect(result.stdout).not.toContain("\n");
-      expect(result.stdout).toMatch(
-        /^\[\{"seriesId":"A2603039T","date":"1997-09-01","value":67\.4\},/u,
-      );
+      expect(series).toEqual([WAGES, LOCAL]);
     }),
   );
 
-  it.effect("pretty-prints JSON with metadata when stdout is a terminal", () =>
+  it.effect("pretty-prints the Series list as JSON when stdout is a terminal", () =>
     Effect.gen(function* () {
-      const http = fixtureHttpClient(wagePriceIndexResponses());
-
       const result = yield* runCli(
         ["abs", "get", "--catalogue", "6345.0", "--format", "json"],
-        http.layer,
+        reading([WAGES]).layer,
         { isTerminal: true },
       );
 
+      const series: unknown = JSON.parse(result.stdout);
+
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toMatch(
-        /^\[\n {2}\{\n {4}"tableId": "634501",\n {4}"sheet": "Data1",/u,
+        /^\[\n {2}\{\n {4}"seriesId": "A2603039T",\n {4}"seriesDescription"/u,
       );
+      expect(series).toEqual([WAGES]);
     }),
   );
 
+  it.effect("writes each Series with only its series ID and observations with --no-metadata", () =>
+    Effect.gen(function* () {
+      const result = yield* runCli(
+        ["abs", "get", "--catalogue", "6345.0", "--format", "json", "--no-metadata"],
+        reading([WAGES, LOCAL]).layer,
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toBe(
+        '[{"seriesId":"A2603039T","observations":[{"date":"1997-09-01","value":67.4},{"date":"1997-12-01","value":68}]},' +
+          '{"seriesId":"A1000001A","observations":[{"date":"2026-01-01","value":-1.5}]}]',
+      );
+    }),
+  );
+});
+
+describe("ausecon abs get requests", () => {
+  it.effect("reads every table of a catalogue number when --table is absent", () =>
+    Effect.gen(function* () {
+      const reader = reading([]);
+
+      yield* runCli(["abs", "get", "--catalogue", "6345.0"], reader.layer);
+
+      expect(reader.requests).toEqual([
+        AbsRequest.Catalogue({ catalogueNumber: "6345.0", tableNumbers: [] }),
+      ]);
+    }),
+  );
+
+  it.effect("reads only the tables named by repeated --table flags", () =>
+    Effect.gen(function* () {
+      const reader = reading([]);
+
+      yield* runCli(
+        ["abs", "get", "--catalogue", "6345.0", "--table", "1", "--table", "7a"],
+        reader.layer,
+      );
+
+      expect(reader.requests).toEqual([
+        AbsRequest.Catalogue({ catalogueNumber: "6345.0", tableNumbers: ["1", "7a"] }),
+      ]);
+    }),
+  );
+
+  it.effect("reads every series named by repeated --series flags, as typed", () =>
+    Effect.gen(function* () {
+      const reader = reading([]);
+
+      yield* runCli(["abs", "get", "--series", "A2603039T", "--series", "a2454446f"], reader.layer);
+
+      expect(reader.requests).toEqual([
+        AbsRequest.Series({ seriesIds: ["A2603039T", "a2454446f"] }),
+      ]);
+    }),
+  );
+});
+
+describe("ausecon abs get help", () => {
   it.effect("leads help with examples and warns about large catalogue numbers", () =>
     Effect.gen(function* () {
-      const result = yield* runCli(["abs", "get", "--help"], noRequests.layer);
+      const result = yield* runCli(["abs", "get", "--help"], noReads.layer);
 
       expect(result.exitCode).toBe(0);
       expect(result.stderr).toBe("");
@@ -170,9 +257,7 @@ describe("ausecon abs get --catalogue", () => {
 
   it.effect("colours help on a terminal", () =>
     Effect.gen(function* () {
-      const result = yield* runCli(["abs", "get", "--help"], noRequests.layer, {
-        isTerminal: true,
-      });
+      const result = yield* runCli(["abs", "get", "--help"], noReads.layer, { isTerminal: true });
 
       expect(result.stdout).toContain(ANSI_ESCAPE);
     }),
@@ -180,7 +265,7 @@ describe("ausecon abs get --catalogue", () => {
 
   it.effect("turns colour off on a terminal when NO_COLOR is set", () =>
     Effect.gen(function* () {
-      const result = yield* runCli(["abs", "get", "--help"], noRequests.layer, {
+      const result = yield* runCli(["abs", "get", "--help"], noReads.layer, {
         isTerminal: true,
         env: { NO_COLOR: "1" },
       });
@@ -191,64 +276,7 @@ describe("ausecon abs get --catalogue", () => {
   );
 });
 
-/** The distinct table IDs in CSV output with metadata, in first-seen order. */
-const tableIdsOf = (stdout: string): ReadonlyArray<string> => [
-  ...new Set(
-    stdout
-      .split("\n")
-      .slice(1)
-      .map((line) => line.slice(0, line.indexOf(","))),
-  ),
-];
-
-describe("ausecon abs get --table", () => {
-  it.effect("reads only the tables named by repeated --table flags", () =>
-    Effect.gen(function* () {
-      const http = fixtureHttpClient(wagePriceIndexResponses());
-
-      const result = yield* runCli(
-        ["abs", "get", "--catalogue", "6345.0", "--table", "1", "--table", "7a"],
-        http.layer,
-      );
-
-      expect(result.exitCode).toBe(0);
-      expect(result.stderr).toBe("");
-      expect(result.stdout.split("\n").slice(0, 2)).toEqual([METADATA_HEADER, FIRST_METADATA_ROW]);
-      expect(tableIdsOf(result.stdout)).toEqual(["634501", "634507a"]);
-      expect(http.requests.filter((request) => request.url.endsWith(".xlsx"))).toHaveLength(2);
-    }),
-  );
-});
-
-describe("ausecon abs get --series", () => {
-  it.effect("reads every series named by repeated --series flags", () =>
-    Effect.gen(function* () {
-      const http = fixtureHttpClient(seriesResponses());
-
-      const result = yield* runCli(
-        ["abs", "get", "--series", "A2603039T", "--series", "a2454446f", "--no-metadata"],
-        http.layer,
-      );
-
-      const counts = Map.groupBy(result.stdout.split("\n").slice(1), (line) =>
-        line.slice(0, line.indexOf(",")),
-      );
-
-      expect(result.exitCode).toBe(0);
-      expect(result.stderr).toBe("");
-      expect(result.stdout.split("\n")[0]).toBe("seriesId,date,value");
-      // `NoObs` in the recorded Time Series Directory rows.
-      expect(
-        Object.fromEntries([...counts].map(([seriesId, lines]) => [seriesId, lines.length])),
-      ).toEqual({
-        A2603039T: 116,
-        A2454446F: 268,
-      });
-    }),
-  );
-});
-
-describe("ausecon abs get failures", () => {
+describe("ausecon abs get usage errors", () => {
   it.effect.each([
     {
       name: "neither --catalogue nor --series",
@@ -277,174 +305,153 @@ describe("ausecon abs get failures", () => {
     },
   ])("exits 2 with help on stderr and nothing on stdout for $name", ({ argv, message }) =>
     Effect.gen(function* () {
-      const result = yield* runCli(argv, noRequests.layer);
+      const result = yield* runCli(argv, noReads.layer);
 
       expect(result.exitCode).toBe(2);
       expect(result.stdout).toBe("");
       expect(result.stderr).toContain("USAGE");
       expect(result.stderr).toContain(message);
-      expect(noRequests.requests).toEqual([]);
+      expect(noReads.requests).toEqual([]);
     }),
   );
+});
 
-  it.effect("exits 2 with a next step for a malformed catalogue number", () =>
-    Effect.gen(function* () {
-      const result = yield* runCli(["abs", "get", "--catalogue", "wages"], noRequests.layer);
+const TABLE_URL =
+  "https://www.abs.gov.au/statistics/economy/price-indexes-and-inflation/wage-price-index-australia/latest-release/634501.xlsx";
 
-      expect(result.exitCode).toBe(2);
-      expect(result.stdout).toBe("");
-      expect(result.stderr).toContain("ausecon abs get --help");
-    }),
-  );
+const DIRECTORY_URL = "https://abs.gov.au/servlet/TSSearchServlet?catno=6345.0";
 
-  it.effect("exits 3 with a next step when the catalogue number has no series", () =>
-    Effect.gen(function* () {
-      const http = fixtureHttpClient(
-        new Map([[directoryUrl({ catno: "9999.0" }), recorded("directory-catno-9999.0.xml")]]),
-      );
+const REPORT_IT = `Report this at ${ISSUES} with the command you ran.`;
 
-      const result = yield* runCli(["abs", "get", "--catalogue", "9999.0"], http.layer);
-
-      expect(result.exitCode).toBe(3);
-      expect(result.stdout).toBe("");
-      expect(result.stderr).toBe(
+describe("ausecon abs get read failures", () => {
+  const failures: ReadonlyArray<{
+    readonly name: string;
+    readonly error: ReadAbsError;
+    readonly exitCode: number;
+    readonly stderr: string;
+  }> = [
+    {
+      name: "InvalidRequest",
+      error: new InvalidRequest({ message: "Expected a catalogue number, got wages" }),
+      exitCode: 2,
+      stderr:
+        "ausecon: Expected a catalogue number, got wages\n" +
+        "Run `ausecon abs get --help` for usage and examples.",
+    },
+    {
+      name: "CatalogueNotFound",
+      error: new CatalogueNotFound({
+        catalogueNumber: Schema.decodeSync(CatalogueNumber)("9999.0"),
+      }),
+      exitCode: 3,
+      stderr:
         "ausecon: The Time Series Directory has no series for catalogue number 9999.0.\n" +
-          "Check the catalogue number on the ABS website, such as 6345.0 for the Wage Price Index.",
-      );
-    }),
-  );
-
-  it.effect("exits 3 and names every unknown table number", () =>
-    Effect.gen(function* () {
-      const http = fixtureHttpClient(wagePriceIndexResponses());
-
-      const result = yield* runCli(
-        ["abs", "get", "--catalogue", "6345.0", "--table", "1", "--table", "6", "--table", "x99"],
-        http.layer,
-      );
-
-      expect(result.exitCode).toBe(3);
-      expect(result.stdout).toBe("");
-      expect(result.stderr).toBe(
+        "Check the catalogue number on the ABS website, such as 6345.0 for the Wage Price Index.",
+    },
+    {
+      name: "TableNotFound",
+      error: new TableNotFound({
+        catalogueNumber: Schema.decodeSync(CatalogueNumber)("6345.0"),
+        tableNumbers: ["6", "X99"].map((value) => Schema.decodeSync(TableNumber)(value)),
+      }),
+      exitCode: 3,
+      stderr:
         "ausecon: Catalogue number 6345.0 has no table numbered 6, X99.\n" +
-          "Leave out --table to read every table, then pick table numbers from the tableTitle column.",
-      );
-    }),
+        "Leave out --table to read every table, then pick table numbers from the tableTitle column.",
+    },
+    {
+      name: "SeriesNotFound",
+      error: new SeriesNotFound({
+        seriesIds: ["A2325807L", "Z9999999Z"].map((value) => Schema.decodeSync(SeriesId)(value)),
+      }),
+      exitCode: 3,
+      stderr:
+        "ausecon: Found no series ID A2325807L, Z9999999Z in the Time Series Directory or the table it names.\n" +
+        "Check the series ID in the ABS table that holds it.",
+    },
+    {
+      name: "AbsUnavailable with a status",
+      error: new AbsUnavailable({
+        url: TABLE_URL,
+        status: 404,
+        detail: "The ABS answered with status 404.",
+      }),
+      exitCode: 4,
+      stderr:
+        `ausecon: Could not read ${TABLE_URL}: The ABS answered with status 404.\n` +
+        `Try again later. The ABS website may be down, or the data may have moved: if the error stays, report it at ${ISSUES}.`,
+    },
+    {
+      name: "AbsUnavailable without a status",
+      error: new AbsUnavailable({ url: DIRECTORY_URL, detail: "offline" }),
+      exitCode: 4,
+      stderr:
+        `ausecon: Could not read ${DIRECTORY_URL}: offline\n` +
+        "Check your network connection, then try again. The ABS website may be down.",
+    },
+    {
+      name: "TimeSeriesDirectoryError",
+      error: new TimeSeriesDirectoryError({
+        url: DIRECTORY_URL,
+        reason: "The Time Series Directory answered: Invalid query.",
+      }),
+      exitCode: 1,
+      stderr:
+        `ausecon: Time Series Directory fault at ${DIRECTORY_URL}: The Time Series Directory answered: Invalid query.\n` +
+        REPORT_IT,
+    },
+    {
+      name: "TableLayoutError with a sheet",
+      error: new TableLayoutError({
+        tableId: Schema.decodeSync(TableId)("634501"),
+        sheet: "Data1",
+        reason: "Column A of row 10 is not `Series ID`.",
+      }),
+      exitCode: 1,
+      stderr:
+        "ausecon: Table 634501, sheet Data1, does not have the ABS time series layout: Column A of row 10 is not `Series ID`.\n" +
+        REPORT_IT,
+    },
+    {
+      name: "TableLayoutError without a sheet",
+      error: new TableLayoutError({
+        tableId: Schema.decodeSync(TableId)("634501"),
+        reason: "The table cannot be opened as .xlsx.",
+      }),
+      exitCode: 1,
+      stderr:
+        "ausecon: Table 634501 does not have the ABS time series layout: The table cannot be opened as .xlsx.\n" +
+        REPORT_IT,
+    },
+  ];
+
+  it.effect.each(failures)(
+    "exits $exitCode with a next step and nothing on stdout for $name",
+    ({ error, exitCode, stderr }) =>
+      Effect.gen(function* () {
+        const result = yield* runCli(
+          ["abs", "get", "--catalogue", "6345.0"],
+          fakeReader(Effect.fail(error)).layer,
+        );
+
+        expect(result.exitCode).toBe(exitCode);
+        expect(result.stdout).toBe("");
+        expect(result.stderr).toBe(stderr);
+      }),
   );
 
-  it.effect("exits 3 and names every unknown series ID", () =>
+  it.effect("exits 1 and reports a fault when the read fails unexpectedly", () =>
     Effect.gen(function* () {
-      const http = fixtureHttpClient(
-        new Map([
-          ...seriesResponses(),
-          [directoryUrl({ sid: "A2325807L" }), recorded("sid-A2325807L.xml")],
-          [directoryUrl({ sid: "Z9999999Z" }), recorded("sid-A2325807L.xml")],
-        ]),
-      );
-
       const result = yield* runCli(
-        ["abs", "get", "--series", "A2325807L", "--series", "A2603039T", "--series", "z9999999z"],
-        http.layer,
+        ["abs", "get", "--catalogue", "6345.0"],
+        fakeReader(Effect.die("boom")).layer,
       );
-
-      expect(result.exitCode).toBe(3);
-      expect(result.stdout).toBe("");
-      expect(result.stderr).toBe(
-        "ausecon: The Time Series Directory has no record of series ID A2325807L, Z9999999Z.\n" +
-          "Check the series ID in the ABS table that holds it.",
-      );
-    }),
-  );
-
-  it.effect("exits 4 with nothing on stdout when a table download fails", () =>
-    Effect.gen(function* () {
-      const http = fixtureHttpClient(
-        wagePriceIndexWith(TABLE_1_URL, { status: 404, body: "<html>Page not found</html>" }),
-      );
-
-      const result = yield* runCli(["abs", "get", "--catalogue", "6345.0"], http.layer);
-
-      expect(result.exitCode).toBe(4);
-      expect(result.stdout).toBe("");
-      expect(result.stderr).toContain("404");
-      expect(result.stderr).toContain("Try again later");
-      expect(result.stderr).not.toContain("network connection");
-    }),
-  );
-
-  it.effect("exits 4 and points at the network when a request cannot be sent", () =>
-    Effect.gen(function* () {
-      const offline = Layer.succeed(
-        HttpClient.HttpClient,
-        HttpClient.make((request) =>
-          Effect.fail(
-            new HttpClientError.HttpClientError({
-              reason: new HttpClientError.TransportError({ request, description: "offline" }),
-            }),
-          ),
-        ),
-      );
-
-      const result = yield* runCli(["abs", "get", "--catalogue", "6345.0"], offline);
-
-      expect(result.exitCode).toBe(4);
-      expect(result.stdout).toBe("");
-      expect(result.stderr).toContain("Check your network connection");
-    }),
-  );
-
-  it.effect("exits 4 and asks for a report when the directory answers with an error", () =>
-    Effect.gen(function* () {
-      const http = fixtureHttpClient(
-        wagePriceIndexWith(
-          directoryUrl({ catno: "6345.0" }),
-          recorded("directory-error-invalid-query.xml"),
-        ),
-      );
-
-      const result = yield* runCli(["abs", "get", "--catalogue", "6345.0"], http.layer);
-
-      expect(result.exitCode).toBe(4);
-      expect(result.stdout).toBe("");
-      expect(result.stderr).toContain("github.com/jackemcpherson/ausecon/issues");
-      expect(result.stderr).not.toContain("network connection");
-    }),
-  );
-
-  it.effect("exits 1 when a table does not have the time series layout", () =>
-    Effect.gen(function* () {
-      const http = fixtureHttpClient(
-        wagePriceIndexWith(TABLE_1_URL, {
-          status: 200,
-          body: new TextEncoder().encode("<html><body>Not a spreadsheet</body></html>"),
-        }),
-      );
-
-      const result = yield* runCli(["abs", "get", "--catalogue", "6345.0"], http.layer);
 
       expect(result.exitCode).toBe(1);
       expect(result.stdout).toBe("");
-      expect(result.stderr).toContain("Table 634501 does not have the ABS time series layout");
-      expect(result.stderr).toContain("github.com/jackemcpherson/ausecon/issues");
-    }),
-  );
-
-  it.effect("names the table ID and sheet when a sheet does not have the layout", () =>
-    Effect.gen(function* () {
-      const http = fixtureHttpClient(
-        wagePriceIndexWith(TABLE_1_URL, {
-          status: 200,
-          body: syntheticTable([["Data1", [["Unit"], ["Not the layout"]]]]),
-        }),
-      );
-
-      const result = yield* runCli(["abs", "get", "--catalogue", "6345.0"], http.layer);
-
-      expect(result.exitCode).toBe(1);
-      expect(result.stdout).toBe("");
-      expect(result.stderr).toContain(
-        "Table 634501, sheet Data1, does not have the ABS time series layout",
-      );
+      expect(result.stderr).toContain("ausecon: failed unexpectedly.");
+      expect(result.stderr).toContain("boom");
+      expect(result.stderr).toContain(`Report this at ${ISSUES}.`);
     }),
   );
 });

@@ -41,10 +41,32 @@ const wages = await Effect.runPromise(
 console.log(wages[0]);
 ```
 
-Each observation holds the 12 `readabs` columns in camelCase: `tableId`,
-`sheet`, `tableTitle`, `date`, `seriesDescription`, `value`, `seriesType`,
-`dataType`, `collectionMonth`, `frequency`, `seriesId`, and `unit`. Dates are
-ISO 8601 strings such as `1997-09-01`.
+`readAbs` returns a read-only array of series, one per series ID and sheet.
+Each series carries its metadata once, the table it came from, and its
+observations:
+
+```ts
+{
+  seriesId: "A2603039T",
+  seriesDescription: "Quarterly Index ;  Total hourly rates of pay excluding bonuses ;  ...",
+  unit: "Index Numbers",
+  seriesType: "Original",
+  dataType: "INDEX",
+  frequency: "Quarter",
+  collectionMonth: "3",
+  table: { tableId: "634501", tableTitle: "Table 1. Total Hourly Rates of Pay ..." },
+  sheet: "Data1",
+  observations: [
+    { date: "1997-09-01", value: 67.4 },
+    // ...
+  ],
+}
+```
+
+Series come in table order, then sheet order, then column order, and
+observations in row order. Dates are ISO 8601 strings such as `1997-09-01`, so
+time zones never shift a period. Blank and text cells give no observation.
+The `Series`, `Table`, and `Observation` types describe this shape.
 
 Leave out `tableNumbers` to read every table of the catalogue number. To read
 series IDs instead, pass a series request:
@@ -57,12 +79,34 @@ const series = await Effect.runPromise(
 );
 ```
 
-Pass `{ hasMetadata: false }` as the second argument to get only the series ID,
-date, and value of each observation.
+A series request returns only the requested series.
 
 The read trims spaces from each catalogue number, table number, and series
 ID, and upper-cases table numbers and series IDs. A four-digit catalogue
 number such as `6345` gains `.0`.
+
+## Parse a Table You Hold
+
+`parseTable` reads the series of one ABS time series table from its `.xlsx`
+bytes, with no network. It is the parser that `readAbs` uses. Pass the bytes
+and the table, with the table ID and, if you know it, the title:
+
+```ts
+import { readFile } from "node:fs/promises";
+
+import { TableId, parseTable } from "@ausecon/core";
+import { Effect, Schema } from "effect";
+
+const bytes = new Uint8Array(await readFile("634501.xlsx"));
+
+const wages = await Effect.runPromise(
+  parseTable(bytes, { tableId: Schema.decodeSync(TableId)("634501") }),
+);
+```
+
+Each series carries the table as you passed it, so `tableTitle` is absent
+when you leave it out. A table without the ABS time series layout fails with
+`TableLayoutError`.
 
 ## Errors
 
@@ -76,17 +120,24 @@ error channel holds one of these tagged errors:
 - `TableNotFound`: the catalogue number has no table with a requested table
   number.
 - `SeriesNotFound`: the Time Series Directory has no record of a series ID.
-- `WorkbookLayoutError`: a table does not have the ABS time series
-  layout.
-- `HttpClientError`: a request failed or the ABS answered with a status
-  outside 2xx.
+- `TableLayoutError`: a table does not have the ABS time series layout.
+- `TimeSeriesDirectoryError`: a Time Series Directory response is not a
+  series index, such as an error document or malformed XML. It names the URL
+  and the reason.
+- `AbsUnavailable`: a request to the ABS got no response, or a status outside
+  2xx. It names the URL, the status if the ABS answered, and the cause as
+  text in `detail`.
 
-`WorkbookLayoutError` names the table ID and, when a sheet fails the check,
+Every error is a type the library defines. No `effect/http` error reaches
+the error channel.
+
+`TableLayoutError` names the table ID and, when a sheet fails the check,
 the sheet. A file that does not open as `.xlsx` gives the error without a
 sheet. Each data sheet must hold `Series ID` in column A of row 10, and the
 five metadata labels `Unit`, `Series Type`, `Data Type`, `Frequency`, and
-`Collection Month` in column A of rows 2 to 9. Below row 10, column A must
-hold a date, a blank, or a note that contains `Trend Break` or `see`.
+`Collection Month` in column A of rows 2 to 9. Each filled cell of row 10
+must hold a series ID. Below row 10, column A must hold a date, a blank, or a
+note that contains `Trend Break` or `see`.
 
 ## Your Own `HttpClient`
 

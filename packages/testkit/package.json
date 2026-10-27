@@ -1,0 +1,14 @@
+{
+  "name": "@ausecon/testkit",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Recorded ABS fixtures and test helpers for the ausecon test suites. Never published.",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "effect": "4.0.6",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  }
+}

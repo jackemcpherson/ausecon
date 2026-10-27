@@ -26,7 +26,6 @@ const coreSource = (path: string): string =>
 export default defineConfig({
   resolve: {
     alias: {
-      "@ausecon/core/promise": coreSource("promise.ts"),
       "@ausecon/core": coreSource("index.ts"),
     },
   },

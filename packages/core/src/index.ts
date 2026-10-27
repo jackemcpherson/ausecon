@@ -1,20 +1,21 @@
+export { parseTable } from "./abs/table-parse";
+
 export { readAbs, type ReadAbsError } from "./abs/time-series";
 
 export {
   AbsRequest,
+  AbsUnavailable,
   CatalogueNotFound,
   CatalogueNumber,
-  CatalogueRequest,
-  DecodedAbsRequest,
   InvalidRequest,
   Observation,
-  ObservationValue,
-  type ReadOptions,
+  Series,
   SeriesId,
   SeriesNotFound,
-  SeriesRequest,
-  TableNotFound,
+  Table,
   TableId,
+  TableNotFound,
   TableNumber,
-  WorkbookLayoutError,
+  TimeSeriesDirectoryError,
+  TableLayoutError,
 } from "./types";

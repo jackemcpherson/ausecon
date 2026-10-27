@@ -41,7 +41,10 @@ Read a watch list of series IDs from any catalogue numbers:
 ausecon abs get --series A2603039T --series A2454446F
 ```
 
-Print only the series ID, date, and value as JSON:
+CSV has one row per observation, with the 12 `readabs` columns. JSON is a
+list of series, each with its metadata, its table, and its observations as
+`date` and `value` pairs. `--no-metadata` writes only series ID, date, and
+value as CSV, and only the series ID and observations of each series as JSON:
 
 ```shell
 ausecon abs get --catalogue 6345.0 --format json --no-metadata
@@ -52,13 +55,13 @@ Pass exactly one of `--catalogue` or `--series`. `--table` needs
 
 ## Exit Codes
 
-| Code | Meaning                                                      |
-| ---- | ------------------------------------------------------------ |
-| 0    | The read succeeded.                                          |
-| 1    | An unexpected failure, such as a table layout change.        |
-| 2    | A usage error, such as a missing flag or an invalid value.   |
-| 3    | No such catalogue number, table number, or series ID.        |
-| 4    | A network failure, or the ABS answered with an HTTP error.   |
+| Code | Meaning                                                                      |
+| ---- | ---------------------------------------------------------------------------- |
+| 0    | The read succeeded.                                                          |
+| 1    | A fault to report, such as a Time Series Directory error or a layout change. |
+| 2    | A usage error, such as a missing flag or an invalid value.                   |
+| 3    | No such catalogue number, table number, or series ID.                        |
+| 4    | The ABS gave no response, or answered with a status outside 2xx.             |
 
 ## Shell Completions
 
