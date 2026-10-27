@@ -1,19 +1,19 @@
 import { Effect, Match } from "effect";
 import type { HttpClient } from "effect/http";
 
-import type {
-  AbsRequest,
-  AbsUnavailable,
-  CatalogueNotFound,
-  CatalogueRequest,
-  DecodedAbsRequest,
-  InvalidRequest,
-  Series,
+import {
+  type AbsRequest,
+  type AbsUnavailable,
+  type CatalogueNotFound,
+  type CatalogueRequest,
+  type DecodedAbsRequest,
+  type InvalidRequest,
+  type Series,
   SeriesNotFound,
-  SeriesRequest,
-  TableNotFound,
-  TimeSeriesDirectoryError,
-  TableLayoutError,
+  type SeriesRequest,
+  type TableNotFound,
+  type TimeSeriesDirectoryError,
+  type TableLayoutError,
 } from "../types";
 import { readTables } from "./download";
 import { decodeRequest } from "./request";
@@ -44,9 +44,18 @@ const readSeries = (
     const located = yield* seriesTables(request.seriesIds);
     const tables = yield* readTables(located.tables);
 
-    return tables.flatMap(({ tableUrl, series }) =>
-      series.filter(({ seriesId }) => located.seriesIds.get(tableUrl)?.has(seriesId) === true),
+    const series = tables.flatMap(({ tableUrl, series: tableSeries }) =>
+      tableSeries.filter(({ seriesId }) => located.seriesIds.get(tableUrl)?.has(seriesId) === true),
     );
+
+    const read = new Set(series.map(({ seriesId }) => seriesId));
+    const missing = [...new Set(request.seriesIds)].filter((seriesId) => !read.has(seriesId));
+
+    if (missing.length > 0) {
+      return yield* new SeriesNotFound({ seriesIds: missing });
+    }
+
+    return series;
   });
 
 const readDecoded: (
@@ -62,7 +71,9 @@ const readDecoded: (
  * Read ABS time series from the latest release.
  *
  * A `Catalogue` request reads the tables of a catalogue number. A `Series`
- * request reads series IDs and returns only the requested Series. The read
+ * request reads series IDs and returns only the requested Series. It fails
+ * with `SeriesNotFound` naming each series ID that the Directory lists in no
+ * table, or that its table does not hold. The read
  * queries the Time Series Directory, downloads each table once, and returns
  * one Series per series ID and sheet: in table order, then sheet order, then
  * column order.

@@ -334,6 +334,30 @@ describe("readAbs on a synthetic release", () => {
 });
 
 describe("readAbs edge responses", () => {
+  it.effect("fails with SeriesNotFound for a series ID its listed table lacks", () =>
+    Effect.gen(function* () {
+      const directoryRow = (seriesId: string): RecordedResponse => ({
+        status: 200,
+        body: `<?xml version="1.0" encoding="utf-8" ?><TimeSeriesIndex><Series><ProductReleaseDate>15/04/2026</ProductReleaseDate><TableURL>${TABLE_1_URL}</TableURL><TableTitle>Table 1. Index</TableTitle><TableOrder>1</TableOrder><SeriesID>${seriesId}</SeriesID></Series></TimeSeriesIndex>`,
+      });
+
+      const http = fixtureHttpClient(
+        new Map<string, RecordedResponse>([
+          [directoryUrl({ sid: "A1000001A" }), directoryRow("A1000001A")],
+          [directoryUrl({ sid: "A1000009J" }), directoryRow("A1000009J")],
+          [TABLE_1_URL, { status: 200, body: validTable1 }],
+        ]),
+      );
+
+      const error = yield* readAbs(
+        AbsRequest.Series({ seriesIds: ["A1000009J", "A1000001A", "A1000009J"] }),
+      ).pipe(Effect.flip, Effect.provide(http.layer));
+
+      expect(error._tag).toBe("SeriesNotFound");
+      expect(error).toHaveProperty("seriesIds", ["A1000009J"]);
+    }),
+  );
+
   it.effect(
     "fails with TimeSeriesDirectoryError for a listed table URL that cannot be requested",
     () =>

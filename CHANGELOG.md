@@ -24,6 +24,10 @@ CSV output and exit codes 2 and 3 do not change.
   carries its metadata once, its `Table` (`tableId` and an optional
   `tableTitle`), its sheet, and its observations as `date` and `value` pairs.
   A series request returns only the requested series.
+- A series request fails with `SeriesNotFound` when the table that the Time
+  Series Directory names for a series ID does not hold it. In 0.1.0 the read
+  dropped the series, and `ausecon` wrote only a header and exited 0. It now
+  exits 3.
 - A column with a series ID in row 10 but no number cells now yields a
   `Series` with empty `observations`. In 0.1.0 it yielded nothing. JSON
   output shows such a series. CSV output does not change, because the series
