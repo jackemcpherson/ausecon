@@ -6,7 +6,7 @@ import {
   CatalogueNotFound,
   type CatalogueRequest,
   type DecodedAbsRequest,
-  InvalidRequest,
+  type InvalidRequest,
   type Observation,
   type ObservationValue,
   type ReadOptions,
