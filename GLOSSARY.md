@@ -24,11 +24,13 @@ _Avoid_: Workbook, file, spreadsheet
 
 **Table Number**:
 The number in the ABS title of a table, such as `1` in "Table 1. Labour force
-status".
+status". It can carry a letter prefix or suffix and an underscore suffix, such
+as `X28`, `10C`, or `021_MTH`. Some tables have no table number.
 _Avoid_: Table index, table no
 
 **Table ID**:
-The file name of a table without its extension, such as `6202001`.
+The file name of a table without its extension, such as `6202001`. Table IDs
+are not always numeric, such as `62020x28` or `3222_table_a1`.
 _Avoid_: Table number, table no, table code
 
 **Series**:

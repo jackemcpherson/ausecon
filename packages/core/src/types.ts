@@ -23,10 +23,11 @@ export const SeriesId = Schema.String.pipe(
 export type SeriesId = typeof SeriesId.Type;
 
 /**
- * The number in the ABS title of a table, such as `1` or `5a`.
+ * The number in the ABS title of a table, such as `1`, `5a`, `X28`, or
+ * `021_MTH`.
  */
 export const TableNumber = Schema.String.pipe(
-  Schema.check(Schema.isPattern(/^\d+[a-z]?$/)),
+  Schema.check(Schema.isPattern(/^[A-Z]?\d+[A-Za-z]?(?:_[A-Za-z0-9]+)?$/)),
   Schema.brand("TableNumber"),
 );
 

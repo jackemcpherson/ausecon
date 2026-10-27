@@ -32,7 +32,23 @@ describe("TableNumber", () => {
     expect(Schema.is(TableNumber)("5a")).toBe(true);
   });
 
-  it("rejects a table ID", () => {
+  it("accepts a table number with an uppercase letter suffix", () => {
+    expect(Schema.is(TableNumber)("10C")).toBe(true);
+  });
+
+  it("accepts a table number with a letter prefix", () => {
+    expect(Schema.is(TableNumber)("X28")).toBe(true);
+  });
+
+  it("accepts a table number with an underscore suffix", () => {
+    expect(Schema.is(TableNumber)("021_MTH")).toBe(true);
+  });
+
+  it("rejects a decimal table number", () => {
+    expect(Schema.is(TableNumber)("12.1")).toBe(false);
+  });
+
+  it("rejects a table title", () => {
     expect(Schema.is(TableNumber)("Table 1")).toBe(false);
   });
 });
