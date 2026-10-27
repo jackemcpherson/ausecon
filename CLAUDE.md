@@ -32,6 +32,12 @@ bun run build       # vp pack for both packages
 bun run docs:check  # rumdl and Vale
 ```
 
+The pre-commit hook in `.vite-hooks/pre-commit` runs `vp staged`. Do not set a
+local `core.hooksPath`: it would bypass the global gitleaks hook. Instead, run
+`GIT_CONFIG_GLOBAL=/dev/null vp hooks enable`, then
+`git config --local --unset core.hooksPath`, and make `.git/hooks/pre-commit`
+exec `.vite-hooks/_/pre-commit`. The global hook calls it after its scan.
+
 Run `bun run test --coverage` to apply the coverage thresholds (85 percent
 overall, 90 percent for `*-parse.ts`). Set `AUSECON_LIVE=1` to add the live
 ABS test project.
