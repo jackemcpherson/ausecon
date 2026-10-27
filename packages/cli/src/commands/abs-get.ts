@@ -1,8 +1,9 @@
-import { AbsRequest, readAbs } from "@ausecon/core";
+import { AbsRequest } from "@ausecon/core";
 import { Console, Effect, Option, Stdio } from "effect";
 import { CliError, Command, Flag } from "effect/cli";
 
 import { OUTPUT_FORMATS, renderSeries } from "../output";
+import { AbsReader } from "../reader";
 
 const flags = {
   catalogue: Flag.String("catalogue").pipe(
@@ -60,7 +61,7 @@ const requestOf = (input: GetInput): Effect.Effect<AbsRequest, CliError.Validati
 const get = Effect.fn("absGet")(function* (input: GetInput) {
   const request = yield* requestOf(input);
   const isTerminal = yield* (yield* Stdio.Stdio).stdoutIsTerminal;
-  const series = yield* readAbs(request);
+  const series = yield* (yield* AbsReader).read(request);
 
   yield* Console.log(
     renderSeries(series, { format: input.format, hasMetadata: input.hasMetadata, isTerminal }),

@@ -1,10 +1,10 @@
 import { Config, Console, Effect, Option, Stdio } from "effect";
 import { CliOutput, Command } from "effect/cli";
-import type { HttpClient } from "effect/http";
 
 import { ausecon } from "./commands/ausecon";
 import { EXIT_CODE, outcomeOf } from "./failure";
 import { helpFormatter } from "./help";
+import type { AbsReader } from "./reader";
 
 /**
  * Colour is on only when stdout and stderr are terminals and `NO_COLOR` is
@@ -44,27 +44,27 @@ const holding = (console: Console.Console, held: Array<ReadonlyArray<unknown>>):
 export const runAusecon: (
   argv: ReadonlyArray<string>,
   version: string,
-) => Effect.Effect<number, never, Command.Environment | HttpClient.HttpClient> = Effect.fn(
-  "runAusecon",
-)(function* (argv: ReadonlyArray<string>, version: string) {
-  const formatter = helpFormatter(yield* hasColours);
-  const console = yield* Console.Console;
-  const held: Array<ReadonlyArray<unknown>> = [];
+) => Effect.Effect<number, never, Command.Environment | AbsReader> = Effect.fn("runAusecon")(
+  function* (argv: ReadonlyArray<string>, version: string) {
+    const formatter = helpFormatter(yield* hasColours);
+    const console = yield* Console.Console;
+    const held: Array<ReadonlyArray<unknown>> = [];
 
-  const exit = yield* Command.runWith(ausecon, { version, renderErrors: false })(argv).pipe(
-    Effect.provideService(Console.Console, holding(console, held)),
-    Effect.provideService(CliOutput.Formatter, formatter),
-    Effect.exit,
-  );
+    const exit = yield* Command.runWith(ausecon, { version, renderErrors: false })(argv).pipe(
+      Effect.provideService(Console.Console, holding(console, held)),
+      Effect.provideService(CliOutput.Formatter, formatter),
+      Effect.exit,
+    );
 
-  const outcome = outcomeOf(exit, formatter);
-  const write = outcome.exitCode === EXIT_CODE.success ? Console.log : Console.error;
+    const outcome = outcomeOf(exit, formatter);
+    const write = outcome.exitCode === EXIT_CODE.success ? Console.log : Console.error;
 
-  yield* Effect.forEach(held, (args) => write(...args), { discard: true });
+    yield* Effect.forEach(held, (args) => write(...args), { discard: true });
 
-  if (Option.isSome(outcome.message)) {
-    yield* Console.error(outcome.message.value);
-  }
+    if (Option.isSome(outcome.message)) {
+      yield* Console.error(outcome.message.value);
+    }
 
-  return outcome.exitCode;
-});
+    return outcome.exitCode;
+  },
+);
