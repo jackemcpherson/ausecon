@@ -9,6 +9,13 @@ packages share one version number.
 
 This release returns series from `readAbs`.
 
+### Added
+
+- `parseTable` in `@ausecon/core` reads the series of one ABS time series
+  table from its `.xlsx` bytes and a `Table`, with the table ID required and
+  the title optional. It is the parser `readAbs` uses, and it fails with
+  `WorkbookLayoutError` for a table without the ABS time series layout.
+
 ### Changed
 
 - `readAbs` returns a read-only array of `Series`, one per series ID and
