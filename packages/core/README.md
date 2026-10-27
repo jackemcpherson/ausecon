@@ -106,8 +106,9 @@ error channel holds one of these tagged errors:
 the sheet. A file that does not open as `.xlsx` gives the error without a
 sheet. Each data sheet must hold `Series ID` in column A of row 10, and the
 five metadata labels `Unit`, `Series Type`, `Data Type`, `Frequency`, and
-`Collection Month` in column A of rows 2 to 9. Below row 10, column A must
-hold a date, a blank, or a note that contains `Trend Break` or `see`.
+`Collection Month` in column A of rows 2 to 9. Each filled cell of row 10
+must hold a series ID. Below row 10, column A must hold a date, a blank, or a
+note that contains `Trend Break` or `see`.
 
 ## Your Own `HttpClient`
 
