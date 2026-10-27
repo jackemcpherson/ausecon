@@ -790,3 +790,5 @@ Optus
 (?i)tuning'?s?
 (?i)overcommit(?:ment|ting)?
 (?i)ausecon
+(?i)servlet
+(?i)datacube
