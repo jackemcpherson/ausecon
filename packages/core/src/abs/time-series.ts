@@ -10,7 +10,8 @@ import {
   type Observation,
   type ObservationValue,
   type ReadOptions,
-  type SeriesNotFound,
+  type SeriesId,
+  SeriesNotFound,
   type SeriesRequest,
   type TableNotFound,
   type WorkbookLayoutError,
@@ -19,6 +20,7 @@ import { readTables } from "./download";
 import { decodeRequest } from "./request";
 import { fetchDirectory } from "./time-series-directory";
 import {
+  type DirectoryRow,
   type DirectoryTable,
   latestReleases,
   tablesOf,
@@ -71,10 +73,54 @@ const readCatalogue = (
 ): Effect.Effect<ReadonlyArray<Observation>, ReadAbsError, HttpClient.HttpClient> =>
   catalogueTables(request).pipe(Effect.flatMap(readTables));
 
+/** The most series IDs looked up in the Time Series Directory at once. */
+const SERIES_CONCURRENCY = 4;
+
+/**
+ * The directory row a series is read from: the lowest `TableOrder` of the
+ * latest release, as `readabs` picks it, so no series appears twice.
+ */
+const seriesRow = (
+  seriesId: SeriesId,
+): Effect.Effect<
+  readonly [SeriesId, DirectoryRow | undefined],
+  HttpClientError.HttpClientError,
+  HttpClient.HttpClient
+> =>
+  fetchDirectory("sid", seriesId).pipe(
+    Effect.map((rows) => [
+      seriesId,
+      latestReleases(withTableUrl(rows)).reduce<DirectoryRow | undefined>(
+        (first, row) => (first === undefined || row.tableOrder < first.tableOrder ? row : first),
+        undefined,
+      ),
+    ]),
+  );
+
 const readSeries = (
-  _request: SeriesRequest,
+  request: SeriesRequest,
 ): Effect.Effect<ReadonlyArray<Observation>, ReadAbsError, HttpClient.HttpClient> =>
-  Effect.fail(new InvalidRequest({ message: "Series ID requests are not supported yet." }));
+  Effect.gen(function* () {
+    const found = yield* Effect.forEach(new Set(request.seriesIds), seriesRow, {
+      concurrency: SERIES_CONCURRENCY,
+    });
+
+    const missing = found.flatMap(([seriesId, row]) => (row === undefined ? [seriesId] : []));
+
+    if (missing.length > 0) {
+      return yield* new SeriesNotFound({ seriesIds: missing });
+    }
+
+    const rows = found.flatMap(([, row]) => (row === undefined ? [] : [row]));
+    const tables = tablesOf(rows);
+    const tableIds = new Map(tables.map((table) => [table.tableUrl, table.tableId]));
+    const wanted = new Set(rows.map((row) => `${tableIds.get(row.tableUrl)} ${row.seriesId}`));
+    const observations = yield* readTables(tables);
+
+    return observations.filter((observation) =>
+      wanted.has(`${observation.tableId} ${observation.seriesId}`),
+    );
+  });
 
 const read = (
   request: AbsRequest,
