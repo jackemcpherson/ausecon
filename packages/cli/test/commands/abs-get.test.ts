@@ -9,6 +9,7 @@ import {
   recorded,
   wagePriceIndexResponses,
 } from "../../../core/test/fixture-http-client";
+import { syntheticTable } from "../../../core/test/synthetic-table";
 import { runCli } from "../run-cli";
 
 const METADATA_HEADER =
@@ -350,6 +351,25 @@ describe("ausecon abs get failures", () => {
       expect(result.stdout).toBe("");
       expect(result.stderr).toContain("Table 634501 does not have the ABS time series layout");
       expect(result.stderr).toContain("github.com/jackemcpherson/ausecon/issues");
+    }),
+  );
+
+  it.effect("names the table ID and sheet when a sheet does not have the layout", () =>
+    Effect.gen(function* () {
+      const http = fixtureHttpClient(
+        wagePriceIndexWith(TABLE_1_URL, {
+          status: 200,
+          body: syntheticTable([["Data1", [["Unit"], ["Not the layout"]]]]),
+        }),
+      );
+
+      const result = yield* runCli(["abs", "get", "--catalogue", "6345.0"], http.layer);
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toContain(
+        "Table 634501, sheet Data1, does not have the ABS time series layout",
+      );
     }),
   );
 });

@@ -1,4 +1,4 @@
-import type { ReadAbsError } from "@ausecon/core";
+import type { ReadAbsError, WorkbookLayoutError } from "@ausecon/core";
 import { Cause, Exit, Match, Option } from "effect";
 import type { CliError, CliOutput } from "effect/cli";
 
@@ -28,6 +28,12 @@ const outcome = (exitCode: number, message: string, nextStep: string): Outcome =
 const USAGE_HINT = "Run `ausecon abs get --help` for usage and examples.";
 
 const ISSUES = "https://github.com/jackemcpherson/ausecon/issues";
+
+/** The table, and the sheet if known, that a layout error names. */
+const layoutSubject = (error: WorkbookLayoutError): string =>
+  error.sheet === undefined
+    ? `Table ${error.tableId}`
+    : `Table ${error.tableId}, sheet ${error.sheet},`;
 
 /** Describe a failed command for a terminal user. */
 const describeError = (formatter: CliOutput.Formatter): ((error: CommandError) => Outcome) =>
@@ -72,7 +78,7 @@ const describeError = (formatter: CliOutput.Formatter): ((error: CommandError) =
     Match.tag("WorkbookLayoutError", (error) =>
       outcome(
         EXIT_CODE.failure,
-        `Table ${error.tableId} does not have the ABS time series layout: ${error.reason}`,
+        `${layoutSubject(error)} does not have the ABS time series layout: ${error.reason}`,
         `Report this at ${ISSUES} with the command you ran.`,
       ),
     ),
