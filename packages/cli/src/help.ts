@@ -14,10 +14,10 @@ export const helpFormatter = (hasColours: boolean): CliOutput.Formatter => {
   const bold = (text: string): string => (hasColours ? `\u001B[1m${text}\u001B[0m` : text);
 
   return {
-    formatCliError: base.formatCliError,
-    formatError: base.formatError,
-    formatErrors: base.formatErrors,
-    formatVersion: base.formatVersion,
+    // `defaultFormatter` returns a plain object of functions, so the spread keeps
+    // every member. The rule cannot tell it from a class instance.
+    // oxlint-disable-next-line typescript/no-misused-spread
+    ...base,
     formatHelpDoc: (doc) => {
       const examples = doc.examples ?? [];
       const rest = base.formatHelpDoc({ ...doc, examples: [] });

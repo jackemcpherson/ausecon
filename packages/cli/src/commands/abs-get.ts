@@ -58,20 +58,19 @@ const get = Effect.fn("absGet")(function* (input: GetInput) {
   const request = yield* requestOf(input);
   const isTerminal = yield* (yield* Stdio.Stdio).stdoutIsTerminal;
 
+  const render = renderObservations(input.format, isTerminal);
+
   const output = input.shouldOmitMetadata
-    ? renderObservations(
-        VALUE_COLUMNS,
-        yield* readAbs(request, { hasMetadata: false }),
-        input.format,
-        isTerminal,
-      )
-    : renderObservations(METADATA_COLUMNS, yield* readAbs(request), input.format, isTerminal);
+    ? render(VALUE_COLUMNS, yield* readAbs(request, { hasMetadata: false }))
+    : render(METADATA_COLUMNS, yield* readAbs(request));
 
   yield* Console.log(output);
 });
 
 /** The `ausecon abs get` command: read ABS time series to stdout. */
 export const absGet = Command.make("get", flags, get).pipe(
+  // Validation runs while flags are parsed, so a usage error shows help. It cannot
+  // pass the request on, so the handler builds it again.
   Command.validate((input) => Effect.asVoid(requestOf(input))),
   Command.withDescription(
     "Read ABS time series from the latest release and write the observations to stdout. " +

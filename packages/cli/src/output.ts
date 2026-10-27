@@ -32,21 +32,28 @@ const toCsv = <Column extends string>(
   ].join("\n");
 
 /**
- * Render observations for stdout.
+ * Build a renderer of observations for stdout.
  *
  * CSV has a header row and one line per observation, with `\n` line endings on
  * every platform. JSON is one array, indented only for a terminal.
  *
- * @param columns - The fields to write, in order.
- * @param rows - The observations.
  * @param format - The output format.
  * @param isTerminal - Whether stdout is a terminal.
- * @returns The text to write to stdout.
+ * @returns A function of the fields to write, in order, and the observations,
+ * that returns the text to write to stdout.
  */
-export const renderObservations = <Column extends string>(
+/** Render observations with the given fields, in order. */
+export type RenderObservations = <Column extends string>(
   columns: ReadonlyArray<Column>,
   rows: ReadonlyArray<Row<Column>>,
-  format: OutputFormat,
-  isTerminal: boolean,
-): string =>
-  format === "csv" ? toCsv(columns, rows) : JSON.stringify(rows, null, isTerminal ? 2 : undefined);
+) => string;
+
+export const renderObservations =
+  (format: OutputFormat, isTerminal: boolean): RenderObservations =>
+  <Column extends string>(
+    columns: ReadonlyArray<Column>,
+    rows: ReadonlyArray<Row<Column>>,
+  ): string =>
+    format === "csv"
+      ? toCsv(columns, rows)
+      : JSON.stringify(rows, null, isTerminal ? 2 : undefined);
