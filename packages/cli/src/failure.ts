@@ -1,6 +1,7 @@
 import type { ReadAbsError, WorkbookLayoutError } from "@ausecon/core";
 import { Cause, Exit, Match, Option } from "effect";
 import { CliError, type CliOutput } from "effect/cli";
+import type { HttpClientError } from "effect/http";
 
 /** Exit codes of the tool. */
 export const EXIT_CODE = {
@@ -34,6 +35,32 @@ const layoutSubject = (error: WorkbookLayoutError): string =>
   error.sheet === undefined
     ? `Table ${error.tableId}`
     : `Table ${error.tableId}, sheet ${error.sheet},`;
+
+/**
+ * The next step for an HTTP failure. Only a transport error points at the
+ * network. A status code means the ABS answered, and a response the tool
+ * cannot read is a fault to report.
+ */
+const httpNextStep: (reason: HttpClientError.HttpClientErrorReason) => string =
+  Match.type<HttpClientError.HttpClientErrorReason>().pipe(
+    Match.tag(
+      "TransportError",
+      () => "Check your network connection, then try again. The ABS website may be down.",
+    ),
+    Match.tag(
+      "StatusCodeError",
+      () =>
+        `Try again later. The ABS website may be down, or the data may have moved: if the error stays, report it at ${ISSUES}.`,
+    ),
+    Match.tag(
+      "DecodeError",
+      "EmptyBodyError",
+      "EncodeError",
+      "InvalidUrlError",
+      () => `Report this at ${ISSUES} with the command you ran.`,
+    ),
+    Match.exhaustive,
+  );
 
 /** Describe a command-line usage error, or a help request, for a terminal user. */
 const describeCliError = (
@@ -85,7 +112,7 @@ const describeReadError: (error: ReadAbsError) => Outcome = Match.type<ReadAbsEr
     outcome(
       EXIT_CODE.network,
       `Could not read from the ABS: ${error.message}`,
-      "Check your network connection, then try again. The ABS website may be down.",
+      httpNextStep(error.reason),
     ),
   ),
   Match.tag("WorkbookLayoutError", (error) =>

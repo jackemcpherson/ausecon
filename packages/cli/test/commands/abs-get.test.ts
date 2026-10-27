@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
+import { HttpClient, HttpClientError } from "effect/http";
 
 import {
   type RecordedResponse,
@@ -332,7 +333,47 @@ describe("ausecon abs get failures", () => {
       expect(result.exitCode).toBe(4);
       expect(result.stdout).toBe("");
       expect(result.stderr).toContain("404");
+      expect(result.stderr).toContain("Try again later");
+      expect(result.stderr).not.toContain("network connection");
+    }),
+  );
+
+  it.effect("exits 4 and points at the network when a request cannot be sent", () =>
+    Effect.gen(function* () {
+      const offline = Layer.succeed(
+        HttpClient.HttpClient,
+        HttpClient.make((request) =>
+          Effect.fail(
+            new HttpClientError.HttpClientError({
+              reason: new HttpClientError.TransportError({ request, description: "offline" }),
+            }),
+          ),
+        ),
+      );
+
+      const result = yield* runCli(["abs", "get", "--catalogue", "6345.0"], offline);
+
+      expect(result.exitCode).toBe(4);
+      expect(result.stdout).toBe("");
       expect(result.stderr).toContain("Check your network connection");
+    }),
+  );
+
+  it.effect("exits 4 and asks for a report when the directory answers with an error", () =>
+    Effect.gen(function* () {
+      const http = fixtureHttpClient(
+        wagePriceIndexWith(
+          directoryUrl({ catno: "6345.0" }),
+          recorded("directory-error-invalid-query.xml"),
+        ),
+      );
+
+      const result = yield* runCli(["abs", "get", "--catalogue", "6345.0"], http.layer);
+
+      expect(result.exitCode).toBe(4);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toContain("github.com/jackemcpherson/ausecon/issues");
+      expect(result.stderr).not.toContain("network connection");
     }),
   );
 
