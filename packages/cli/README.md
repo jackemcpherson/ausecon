@@ -63,7 +63,7 @@ Pass exactly one of `--catalogue` or `--series`. `--table` needs
 ## Shell Completions
 
 `ausecon --completions <shell>` prints a completion script for `bash`, `zsh`,
-`fish`, `sh`, or `powershell`.
+`fish`, `sh`, `powershell`, or `pwsh`.
 
 ## Links
 
