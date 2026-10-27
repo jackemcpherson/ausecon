@@ -1,4 +1,4 @@
-import { Effect, Match } from "effect";
+import { Effect, Match, Predicate } from "effect";
 import {
   HttpClient,
   type HttpClientError,
@@ -17,7 +17,9 @@ export const USER_AGENT = "ausecon (+https://github.com/jackemcpherson/ausecon)"
 /**
  * Turn an Effect HTTP client error into the library's own failure, so that no
  * `effect/http` type leaves the library. Only a status error carries a status:
- * a body that fails to arrive is a missing response.
+ * a body that fails to arrive is a missing response. The cause text is the
+ * error description, or the message of the underlying error, such as the
+ * `fetch` failure.
  */
 const unavailable = (url: string, error: HttpClientError.HttpClientError): AbsUnavailable =>
   Match.value(error.reason).pipe(
@@ -32,7 +34,14 @@ const unavailable = (url: string, error: HttpClientError.HttpClientError): AbsUn
     ),
     Match.orElse(
       (reason) =>
-        new AbsUnavailable({ url, cause: reason.description ?? "The request got no response." }),
+        new AbsUnavailable({
+          url,
+          cause:
+            reason.description ??
+            (Predicate.isError(reason.cause)
+              ? reason.cause.message
+              : "The request got no response."),
+        }),
     ),
   );
 

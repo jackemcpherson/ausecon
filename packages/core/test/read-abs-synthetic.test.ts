@@ -401,4 +401,30 @@ describe("readAbs edge responses", () => {
       expect(error).not.toHaveProperty("status");
     }),
   );
+
+  it.effect("keeps the fetch error as the cause when a request gets no response", () =>
+    Effect.gen(function* () {
+      const offline = Layer.succeed(
+        HttpClient.HttpClient,
+        HttpClient.make((request) =>
+          Effect.fail(
+            new HttpClientError.HttpClientError({
+              reason: new HttpClientError.TransportError({
+                request,
+                cause: new TypeError("getaddrinfo ENOTFOUND abs.gov.au"),
+              }),
+            }),
+          ),
+        ),
+      );
+
+      const error = yield* readAbs(AbsRequest.Catalogue({ catalogueNumber: "1234.0" })).pipe(
+        Effect.flip,
+        Effect.provide(offline),
+      );
+
+      expect(error._tag).toBe("AbsUnavailable");
+      expect(error).toHaveProperty("cause", "getaddrinfo ENOTFOUND abs.gov.au");
+    }),
+  );
 });
