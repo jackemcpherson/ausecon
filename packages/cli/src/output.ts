@@ -31,6 +31,12 @@ const toCsv = <Column extends string>(
     ...rows.map((row) => columns.map((column) => csvField(row[column])).join(",")),
   ].join("\n");
 
+/** Render observations with the given fields, in order. */
+export type RenderObservations = <Column extends string>(
+  columns: ReadonlyArray<Column>,
+  rows: ReadonlyArray<Row<Column>>,
+) => string;
+
 /**
  * Build a renderer of observations for stdout.
  *
@@ -42,12 +48,6 @@ const toCsv = <Column extends string>(
  * @returns A function of the fields to write, in order, and the observations,
  * that returns the text to write to stdout.
  */
-/** Render observations with the given fields, in order. */
-export type RenderObservations = <Column extends string>(
-  columns: ReadonlyArray<Column>,
-  rows: ReadonlyArray<Row<Column>>,
-) => string;
-
 export const renderObservations =
   (format: OutputFormat, isTerminal: boolean): RenderObservations =>
   <Column extends string>(

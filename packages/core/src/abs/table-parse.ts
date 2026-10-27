@@ -88,12 +88,6 @@ const isUnexpectedRowLabel = (cell: CellObject | undefined): boolean => {
 const isDataSheet = (sheetName: string): boolean =>
   !SKIPPED_SHEETS.has(sheetName) && !TABLE_SHEET.test(sheetName);
 
-/**
- * Check that a sheet has the ABS time series layout.
- *
- * Column A of row 10 must hold `Series ID`, and rows 2 to 9 must hold each
- * metadata label that an observation carries.
- */
 /** The zero-based rows from `first` to `last`, inclusive. */
 const rowsBetween = (first: number, last: number): ReadonlyArray<number> =>
   Array.from({ length: Math.max(last - first + 1, 0) }, (_, index) => first + index);
