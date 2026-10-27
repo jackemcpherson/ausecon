@@ -89,10 +89,10 @@ export type DecodedAbsRequest = typeof DecodedAbsRequest.Type;
 /**
  * Options for a read.
  *
- * Set `metadata` to `false` to return only series ID, date, and value.
+ * Set `hasMetadata` to `false` to return only series ID, date, and value.
  */
 export interface ReadOptions {
-  readonly metadata?: boolean;
+  readonly hasMetadata?: boolean;
 }
 
 /**

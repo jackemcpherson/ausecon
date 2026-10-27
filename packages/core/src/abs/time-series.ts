@@ -168,7 +168,7 @@ const read: (
 > = Effect.fn("readAbs")(function* (request: AbsRequest, options?: ReadOptions) {
   const observations = yield* readDecoded(yield* decodeRequest(request));
 
-  return options?.metadata === false ? observations.map(withoutMetadata) : observations;
+  return options?.hasMetadata === false ? observations.map(withoutMetadata) : observations;
 });
 
 /**
@@ -183,7 +183,7 @@ const read: (
  * the library can follow them.
  *
  * @param request - What to read.
- * @param options - Set `metadata: false` to return only series ID, date,
+ * @param options - Set `hasMetadata: false` to return only series ID, date,
  * and value.
  * @returns An Effect that yields the observations.
  *
@@ -194,11 +194,11 @@ const read: (
  */
 export function readAbs(
   request: AbsRequest,
-  options: { readonly metadata: false },
+  options: { readonly hasMetadata: false },
 ): Effect.Effect<ReadonlyArray<ObservationValue>, ReadAbsError, HttpClient.HttpClient>;
 export function readAbs(
   request: AbsRequest,
-  options?: { readonly metadata?: true },
+  options?: { readonly hasMetadata?: true },
 ): Effect.Effect<ReadonlyArray<Observation>, ReadAbsError, HttpClient.HttpClient>;
 export function readAbs(
   request: AbsRequest,

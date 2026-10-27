@@ -57,7 +57,7 @@ const series = await Effect.runPromise(
 );
 ```
 
-Pass `{ metadata: false }` as the second argument to get only the series ID,
+Pass `{ hasMetadata: false }` as the second argument to get only the series ID,
 date, and value of each observation.
 
 ## Errors

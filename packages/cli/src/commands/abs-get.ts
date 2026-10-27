@@ -21,7 +21,7 @@ const flags = {
     Flag.withDescription("Output format: csv or json."),
     Flag.withDefault("csv"),
   ),
-  noMetadata: Flag.Boolean("no-metadata").pipe(
+  shouldOmitMetadata: Flag.Boolean("no-metadata").pipe(
     Flag.withDescription("Write only series ID, date, and value."),
     Flag.withoutNegation,
     Flag.withDefault(false),
@@ -58,10 +58,10 @@ const get = Effect.fn("absGet")(function* (input: GetInput) {
   const request = yield* requestOf(input);
   const isTerminal = yield* (yield* Stdio.Stdio).stdoutIsTerminal;
 
-  const output = input.noMetadata
+  const output = input.shouldOmitMetadata
     ? renderObservations(
         VALUE_COLUMNS,
-        yield* readAbs(request, { metadata: false }),
+        yield* readAbs(request, { hasMetadata: false }),
         input.format,
         isTerminal,
       )

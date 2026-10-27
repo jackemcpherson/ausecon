@@ -54,7 +54,7 @@ describe("readAbs for every table of a catalogue number", () => {
       const http = fixtureHttpClient(wagePriceIndexResponses());
 
       const observations = yield* readAbs(AbsRequest.Catalogue({ catalogueNumber: "6345.0" }), {
-        metadata: false,
+        hasMetadata: false,
       }).pipe(Effect.provide(http.layer));
 
       expect(observations).toHaveLength(73_357);

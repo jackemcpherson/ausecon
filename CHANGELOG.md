@@ -19,7 +19,7 @@ This release reads ABS time series from the latest release.
   chosen tables by table number, or a list of series IDs from any catalogue
   numbers. It returns one observation per series and period, with the 12
   `readabs` columns in camelCase.
-- `readAbs` takes `{ metadata: false }` to return only the series ID, date,
+- `readAbs` takes `{ hasMetadata: false }` to return only the series ID, date,
   and value of each observation.
 - `readAbs` needs an `HttpClient` from the caller and runs on Node, Bun, and
   Deno. It fails with tagged errors: `InvalidRequest`, `CatalogueNotFound`,
