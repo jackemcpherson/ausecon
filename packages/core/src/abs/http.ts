@@ -15,6 +15,12 @@ import { AbsUnavailable } from "../types";
 export const USER_AGENT = "ausecon (+https://github.com/jackemcpherson/ausecon)";
 
 /**
+ * The most requests sent to the ABS at once: Time Series Directory pages,
+ * series lookups, and table downloads.
+ */
+export const ABS_CONCURRENCY = 4;
+
+/**
  * Turn an Effect HTTP client error into the library's own failure, so that no
  * `effect/http` type leaves the library. Only a status error carries a status:
  * a body that fails to arrive is a missing response. The cause text is the
