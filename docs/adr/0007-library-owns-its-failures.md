@@ -2,15 +2,17 @@
 
 `ReadAbsError` holds only tagged errors that `@ausecon/core` defines. No
 `effect/http` type appears in it. The HTTP module maps Effect's client errors
-to `AbsUnavailable` at each request, so Effect's error type stays inside the
-library.
+to `AbsUnavailable` or `TimeSeriesDirectoryError` at each request, so Effect's
+error type stays inside the library.
 
 - `AbsUnavailable`: a request to the ABS got no response or a status outside
   2xx. It carries the URL, the status if the ABS answered, and the cause as
   text.
 - `TimeSeriesDirectoryError`: a Time Series Directory response that is not a
   series index. An error document, malformed XML, and an unexpected layout
-  all fail this way. It carries the URL and the reason.
+  all fail this way. It carries the URL and the reason. A request that was
+  never sent also fails this way, such as one to an invalid URL. Table URLs
+  come from the Directory, so the fault is the listing, not the network.
 - `TableLayoutError`: a table that does not have the ABS time series layout.
 
 `effect/http` is an unstable module. Its reason tags can change between

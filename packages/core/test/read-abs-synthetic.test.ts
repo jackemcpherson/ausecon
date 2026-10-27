@@ -334,6 +334,39 @@ describe("readAbs on a synthetic release", () => {
 });
 
 describe("readAbs edge responses", () => {
+  it.effect(
+    "fails with TimeSeriesDirectoryError for a listed table URL that cannot be requested",
+    () =>
+      Effect.gen(function* () {
+        const http = fixtureHttpClient(
+          new Map<string, RecordedResponse>([
+            [
+              directoryUrl({ catno: "1234.0" }),
+              {
+                status: 200,
+                body: `<?xml version="1.0" encoding="utf-8" ?><TimeSeriesIndex><Series><ProductReleaseDate>15/04/2026</ProductReleaseDate><TableURL>http://[not a host]/data.xlsx</TableURL><TableTitle>Table 1. Bad</TableTitle><TableOrder>1</TableOrder><SeriesID>A1000001A</SeriesID></Series></TimeSeriesIndex>`,
+              },
+            ],
+          ]),
+        );
+
+        const error = yield* readAbs(AbsRequest.Catalogue({ catalogueNumber: "1234.0" })).pipe(
+          Effect.flip,
+          Effect.provide(http.layer),
+        );
+
+        expect(error._tag).toBe("TimeSeriesDirectoryError");
+        expect(error).toHaveProperty("url", "http://[not+a+host]/data.xlsx");
+        expect(error).toHaveProperty(
+          "reason",
+          expect.stringMatching(
+            /^The Time Series Directory lists a URL that cannot be requested: \S/,
+          ),
+        );
+        expect(http.requests).toHaveLength(1);
+      }),
+  );
+
   it.effect("fails with CatalogueNotFound when no row links to a table", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(

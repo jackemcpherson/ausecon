@@ -102,7 +102,7 @@ const describeReadError: (error: ReadAbsError) => Outcome = Match.type<ReadAbsEr
   Match.tag("TimeSeriesDirectoryError", (error) =>
     outcome(
       EXIT_CODE.failure,
-      `The Time Series Directory response from ${error.url} is not a series index: ${error.reason}`,
+      `Time Series Directory fault at ${error.url}: ${error.reason}`,
       REPORT_IT,
     ),
   ),

@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import type { HttpClient } from "effect/http";
 
-import type { AbsUnavailable, Series, TableLayoutError } from "../types";
+import type { AbsUnavailable, Series, TableLayoutError, TimeSeriesDirectoryError } from "../types";
 import { ABS_CONCURRENCY, fetchBytes } from "./http";
 import { parseTable } from "./table-parse";
 import type { Tables } from "./time-series-directory";
@@ -25,7 +25,7 @@ export const readTables: (
   tables: Tables,
 ) => Effect.Effect<
   ReadonlyArray<TableSeries>,
-  TableLayoutError | AbsUnavailable,
+  TableLayoutError | TimeSeriesDirectoryError | AbsUnavailable,
   HttpClient.HttpClient
 > = Effect.fn("readTables")(function* (tables: Tables) {
   return yield* Effect.forEach(

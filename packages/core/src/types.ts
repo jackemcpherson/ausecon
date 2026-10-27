@@ -189,8 +189,9 @@ export class AbsUnavailable extends Schema.TaggedError<AbsUnavailable>()("AbsUna
 }) {}
 
 /**
- * A Time Series Directory response is not a series index: an error document,
- * malformed XML, or an unexpected layout.
+ * A Time Series Directory fault: a response that is not a series index, such
+ * as an error document, malformed XML, or an unexpected layout, or a table URL
+ * that cannot be requested.
  */
 export class TimeSeriesDirectoryError extends Schema.TaggedError<TimeSeriesDirectoryError>()(
   "TimeSeriesDirectoryError",

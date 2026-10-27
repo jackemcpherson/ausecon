@@ -45,8 +45,11 @@ CSV output and exit codes 2 and 3 do not change.
 - A Time Series Directory response that is not a series index fails with
   `TimeSeriesDirectoryError`, which names the URL and the reason. An error
   document is one such response. It no longer fails as an HTTP decode error.
+  A table URL that the library cannot request fails the same way, not as an
+  unavailable ABS.
 - `ausecon` exits 1, not 4, when the Time Series Directory answers with an
-  error document, and asks for a report. Exit 4 names the URL. Without a
+  error document, and asks for a report. It does the same for a listed table
+  URL that it cannot request. Exit 4 names the URL. Without a
   status it points at the network. With one it suggests trying later.
 
 ## 0.1.0 - 2026-10-27

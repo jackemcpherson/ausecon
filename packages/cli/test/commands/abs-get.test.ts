@@ -376,7 +376,7 @@ describe("ausecon abs get read failures", () => {
       }),
       exitCode: 1,
       stderr:
-        `ausecon: The Time Series Directory response from ${DIRECTORY_URL} is not a series index: The Time Series Directory answered: Invalid query.\n` +
+        `ausecon: Time Series Directory fault at ${DIRECTORY_URL}: The Time Series Directory answered: Invalid query.\n` +
         REPORT_IT,
     },
     {
