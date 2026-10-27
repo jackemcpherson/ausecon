@@ -345,7 +345,7 @@ describe("ausecon abs get read failures", () => {
       }),
       exitCode: 3,
       stderr:
-        "ausecon: The Time Series Directory has no record of series ID A2325807L, Z9999999Z.\n" +
+        "ausecon: Found no series ID A2325807L, Z9999999Z in the Time Series Directory or the table it names.\n" +
         "Check the series ID in the ABS table that holds it.",
     },
     {

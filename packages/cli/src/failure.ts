@@ -94,7 +94,7 @@ const describeReadError: (error: ReadAbsError) => Outcome = Match.type<ReadAbsEr
   Match.tag("SeriesNotFound", (error) =>
     outcome(
       EXIT_CODE.notFound,
-      `The Time Series Directory has no record of series ID ${error.seriesIds.join(", ")}.`,
+      `Found no series ID ${error.seriesIds.join(", ")} in the Time Series Directory or the table it names.`,
       "Check the series ID in the ABS table that holds it.",
     ),
   ),

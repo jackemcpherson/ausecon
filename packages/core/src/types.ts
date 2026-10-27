@@ -170,7 +170,8 @@ export class TableNotFound extends Schema.TaggedError<TableNotFound>()("TableNot
 }) {}
 
 /**
- * The Time Series Directory has no record of one or more requested series.
+ * One or more requested series are missing: the Time Series Directory has no
+ * record of them, or the table it names does not hold them.
  */
 export class SeriesNotFound extends Schema.TaggedError<SeriesNotFound>()("SeriesNotFound", {
   seriesIds: Schema.Array(SeriesId),
