@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Option, Struct } from "effect";
 import { type CellObject, type WorkSheet, read, utils } from "xlsx";
 
 import { type Observation, WorkbookLayoutError } from "../types";
@@ -94,56 +94,62 @@ const isDataSheet = (sheetName: string): boolean =>
  * Column A of row 10 must hold `Series ID`, and rows 2 to 9 must hold each
  * metadata label that an observation carries.
  */
+/** The zero-based rows from `first` to `last`, inclusive. */
+const rowsBetween = (first: number, last: number): ReadonlyArray<number> =>
+  Array.from({ length: Math.max(last - first + 1, 0) }, (_, index) => first + index);
+
+/**
+ * Check that a sheet has the ABS time series layout.
+ *
+ * Column A of row 10 must hold `Series ID`, rows 2 to 9 must hold each
+ * metadata label that an observation carries, and each column A cell below
+ * row 10 must hold a date, a blank, or a note.
+ */
 const checkLayout = (
   sheet: WorkSheet,
   name: string,
   table: TableLabels,
 ): Effect.Effect<DataSheet, WorkbookLayoutError> => {
-  const layoutError = (reason: string): WorkbookLayoutError =>
-    new WorkbookLayoutError({ tableId: table.tableId, sheet: name, reason });
+  const layoutError = (reason: string): Effect.Effect<never, WorkbookLayoutError> =>
+    Effect.fail(new WorkbookLayoutError({ tableId: table.tableId, sheet: name, reason }));
 
   const ref = sheet["!ref"];
 
   if (ref === undefined || cellText(cellAt(sheet, SERIES_ID_ROW, 0)) !== "Series ID") {
-    return Effect.fail(layoutError("Column A of row 10 is not `Series ID`."));
+    return layoutError("Column A of row 10 is not `Series ID`.");
   }
 
-  const labelRows = new Map<string, number>();
+  // A later row with the same label wins.
+  const labelRows = new Map(
+    rowsBetween(1, SERIES_ID_ROW - 1).map((row) => [cellText(cellAt(sheet, row, 0)), row]),
+  );
 
-  for (let row = 1; row < SERIES_ID_ROW; row += 1) {
-    labelRows.set(cellText(cellAt(sheet, row, 0)), row);
-  }
+  const rowOf = (field: MetadataField): Option.Option<number> =>
+    Option.fromUndefinedOr(labelRows.get(METADATA_LABELS[field]));
 
-  const rowOf = (field: MetadataField): number => labelRows.get(METADATA_LABELS[field]) ?? -1;
-
-  const metadataRows: MetadataRows = {
+  const metadataRows = Option.all({
     unit: rowOf("unit"),
     seriesType: rowOf("seriesType"),
     dataType: rowOf("dataType"),
     frequency: rowOf("frequency"),
     collectionMonth: rowOf("collectionMonth"),
-  };
+  });
 
-  const missing = Object.entries(metadataRows).flatMap(([field, row]) => (row < 0 ? [field] : []));
+  if (Option.isNone(metadataRows)) {
+    const missing = Struct.keys(METADATA_LABELS).filter((field) => Option.isNone(rowOf(field)));
 
-  if (missing.length > 0) {
-    return Effect.fail(layoutError(`Rows 2 to 9 lack the metadata rows: ${missing.join(", ")}.`));
+    return layoutError(`Rows 2 to 9 lack the metadata rows: ${missing.join(", ")}.`);
   }
 
   const range = utils.decode_range(ref);
-
-  const rows = Array.from(
-    { length: Math.max(range.e.r - FIRST_OBSERVATION_ROW + 1, 0) },
-    (_, index) => FIRST_OBSERVATION_ROW + index,
-  );
-
+  const rows = rowsBetween(FIRST_OBSERVATION_ROW, range.e.r);
   const unexpectedRow = rows.find((row) => isUnexpectedRowLabel(cellAt(sheet, row, 0)));
 
   if (unexpectedRow !== undefined) {
-    return Effect.fail(
-      layoutError(
-        `Cell A${unexpectedRow + 1} holds \`${cellText(cellAt(sheet, unexpectedRow, 0))}\`, which is not a date, a blank, or a note.`,
-      ),
+    const text = cellText(cellAt(sheet, unexpectedRow, 0));
+
+    return layoutError(
+      `Cell A${unexpectedRow + 1} holds \`${text}\`, which is not a date, a blank, or a note.`,
     );
   }
 
@@ -151,7 +157,7 @@ const checkLayout = (
     name,
     sheet,
     lastColumn: range.e.c,
-    metadataRows,
+    metadataRows: metadataRows.value,
     periods: rows.flatMap((row) => {
       const serial = cellNumber(cellAt(sheet, row, 0));
 
@@ -163,13 +169,12 @@ const checkLayout = (
 /** Read the observations of one checked data sheet. */
 const sheetObservations = (data: DataSheet, table: TableLabels): ReadonlyArray<Observation> => {
   const { sheet, metadataRows } = data;
-  const observations: Array<Observation> = [];
 
-  for (let column = 1; column <= data.lastColumn; column += 1) {
+  return rowsBetween(1, data.lastColumn).flatMap((column) => {
     const seriesId = cellText(cellAt(sheet, SERIES_ID_ROW, column));
 
     if (seriesId === "") {
-      continue;
+      return [];
     }
 
     const metadata = (field: MetadataField): string =>
@@ -182,29 +187,29 @@ const sheetObservations = (data: DataSheet, table: TableLabels): ReadonlyArray<O
     const frequency = metadata("frequency");
     const unit = metadata("unit");
 
-    for (const [row, date] of data.periods) {
+    return data.periods.flatMap(([row, date]): ReadonlyArray<Observation> => {
       const value = cellNumber(cellAt(sheet, row, column));
 
-      if (value !== undefined) {
-        observations.push({
-          tableId: table.tableId,
-          sheet: data.name,
-          tableTitle: table.tableTitle,
-          date,
-          seriesDescription,
-          value,
-          seriesType,
-          dataType,
-          collectionMonth,
-          frequency,
-          seriesId,
-          unit,
-        });
-      }
-    }
-  }
-
-  return observations;
+      return value === undefined
+        ? []
+        : [
+            {
+              tableId: table.tableId,
+              sheet: data.name,
+              tableTitle: table.tableTitle,
+              date,
+              seriesDescription,
+              value,
+              seriesType,
+              dataType,
+              collectionMonth,
+              frequency,
+              seriesId,
+              unit,
+            },
+          ];
+    });
+  });
 };
 
 /**
@@ -221,24 +226,26 @@ const sheetObservations = (data: DataSheet, table: TableLabels): ReadonlyArray<O
  * @returns An Effect that yields the observations, or fails with
  * `WorkbookLayoutError`.
  */
-export const parseTable = (
+export const parseTable: (
   bytes: Uint8Array,
   table: TableLabels,
-): Effect.Effect<ReadonlyArray<Observation>, WorkbookLayoutError> =>
-  Effect.try({
-    try: () => read(bytes, { type: "array", cellDates: false, cellHTML: false }),
-    catch: (cause) =>
-      new WorkbookLayoutError({
-        tableId: table.tableId,
-        reason: `The table cannot be opened as .xlsx: ${String(cause)}`,
-      }),
-  }).pipe(
+) => Effect.Effect<ReadonlyArray<Observation>, WorkbookLayoutError> = Effect.fn("parseTable")(
+  function* (bytes: Uint8Array, table: TableLabels) {
+    const file = yield* Effect.try({
+      try: () => read(bytes, { type: "array", cellDates: false, cellHTML: false }),
+      catch: (cause) =>
+        new WorkbookLayoutError({
+          tableId: table.tableId,
+          reason: `The table cannot be opened as .xlsx: ${String(cause)}`,
+        }),
+    });
+
     // SheetJS adds sheets in file order, so entry order is sheet order.
-    Effect.flatMap((workbook) =>
-      Effect.forEach(
-        Object.entries(workbook.Sheets).filter(([name]) => isDataSheet(name)),
-        ([name, sheet]) => checkLayout(sheet, name, table),
-      ),
-    ),
-    Effect.map((sheets) => sheets.flatMap((data) => sheetObservations(data, table))),
-  );
+    const sheets = yield* Effect.forEach(
+      Object.entries(file.Sheets).filter(([name]) => isDataSheet(name)),
+      ([name, sheet]) => checkLayout(sheet, name, table),
+    );
+
+    return sheets.flatMap((data) => sheetObservations(data, table));
+  },
+);
