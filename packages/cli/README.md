@@ -12,8 +12,11 @@ It ports the `readabs` and `readrba` R packages and uses
 The tool is in development. No release exists.
 
 The first release reads ABS time series by catalogue number and table number,
-or by series ID. The tool now runs `--help`, `--version`, and shell
-completions only.
+or by series ID. The tool now reads every table of a catalogue number:
+
+```shell
+ausecon abs get --catalogue 6345.0 > wages.csv
+```
 
 ## Install
 
