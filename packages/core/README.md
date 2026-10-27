@@ -41,10 +41,32 @@ const wages = await Effect.runPromise(
 console.log(wages[0]);
 ```
 
-Each observation holds the 12 `readabs` columns in camelCase: `tableId`,
-`sheet`, `tableTitle`, `date`, `seriesDescription`, `value`, `seriesType`,
-`dataType`, `collectionMonth`, `frequency`, `seriesId`, and `unit`. Dates are
-ISO 8601 strings such as `1997-09-01`.
+`readAbs` returns a read-only array of series, one per series ID and sheet.
+Each series carries its metadata once, the table it came from, and its
+observations:
+
+```ts
+{
+  seriesId: "A2603039T",
+  seriesDescription: "Quarterly Index ;  Total hourly rates of pay excluding bonuses ;  ...",
+  unit: "Index Numbers",
+  seriesType: "Original",
+  dataType: "INDEX",
+  frequency: "Quarter",
+  collectionMonth: "3",
+  table: { tableId: "634501", tableTitle: "Table 1. Total Hourly Rates of Pay ..." },
+  sheet: "Data1",
+  observations: [
+    { date: "1997-09-01", value: 67.4 },
+    // ...
+  ],
+}
+```
+
+Series come in table order, then sheet order, then column order, and
+observations in row order. Dates are ISO 8601 strings such as `1997-09-01`, so
+time zones never shift a period. Blank and text cells give no observation.
+The `Series`, `Table`, and `Observation` types describe this shape.
 
 Leave out `tableNumbers` to read every table of the catalogue number. To read
 series IDs instead, pass a series request:
@@ -57,8 +79,7 @@ const series = await Effect.runPromise(
 );
 ```
 
-Pass `{ hasMetadata: false }` as the second argument to get only the series ID,
-date, and value of each observation.
+A series request returns only the requested series.
 
 The read trims spaces from each catalogue number, table number, and series
 ID, and upper-cases table numbers and series IDs. A four-digit catalogue

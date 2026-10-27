@@ -7,7 +7,24 @@ packages share one version number.
 
 ## Unreleased
 
-No changes yet.
+This release returns series from `readAbs`.
+
+### Changed
+
+- `readAbs` returns a read-only array of `Series`, one per series ID and
+  sheet. Each `Series` carries its metadata once, its `Table` (`tableId` and
+  an optional `tableTitle`), its sheet, and its observations as `date` and
+  `value` pairs. A series request returns only the requested series.
+- `Series.seriesId` is the branded `SeriesId`, the same type as
+  `SeriesNotFound.seriesIds`. A table whose row 10 holds text that is not a
+  series ID fails with `WorkbookLayoutError`.
+- `readAbs` takes one argument. This release removes the options argument,
+  `hasMetadata`, `ReadOptions`, and `ObservationValue`.
+- `@ausecon/core` no longer exports the decoded request schemas
+  `CatalogueRequest`, `SeriesRequest`, and `DecodedAbsRequest`.
+- `ausecon abs get --format json` writes the list of series as `readAbs`
+  returns it. With `--no-metadata`, each series holds only its series ID and
+  observations. CSV output does not change.
 
 ## 0.1.0 - 2026-10-27
 
