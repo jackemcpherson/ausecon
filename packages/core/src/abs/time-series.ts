@@ -12,10 +12,11 @@ import {
   type ReadOptions,
   type SeriesNotFound,
   type SeriesRequest,
-  type TableNotFound,
+  TableNotFound,
   type WorkbookLayoutError,
 } from "../types";
 import { readTables } from "./download";
+import { titleNamesTable } from "./table-number-parse";
 import { decodeRequest } from "./request";
 import { fetchDirectory } from "./time-series-directory";
 import {
@@ -37,16 +38,34 @@ export type ReadAbsError =
 /**
  * Limit the tables of a catalogue number to the requested table numbers.
  *
- * Table number matching is not built yet, so a request with table numbers
- * fails rather than return tables the caller did not ask for.
+ * A request without table numbers reads every table. Otherwise the read keeps
+ * each table whose title names a requested table number, as ADR 0005 records,
+ * and fails with `TableNotFound` if any requested table number names no table.
  */
 const selectTables = (
   request: CatalogueRequest,
   tables: ReadonlyArray<DirectoryTable>,
-): Effect.Effect<ReadonlyArray<DirectoryTable>, InvalidRequest | TableNotFound> =>
-  request.tableNumbers.length === 0
-    ? Effect.succeed(tables)
-    : Effect.fail(new InvalidRequest({ message: "Table numbers are not supported yet." }));
+): Effect.Effect<ReadonlyArray<DirectoryTable>, TableNotFound> => {
+  if (request.tableNumbers.length === 0) {
+    return Effect.succeed(tables);
+  }
+
+  const unmatched = request.tableNumbers.filter(
+    (tableNumber) => !tables.some((table) => titleNamesTable(table.tableTitle, tableNumber)),
+  );
+
+  return unmatched.length > 0
+    ? Effect.fail(
+        new TableNotFound({ catalogueNumber: request.catalogueNumber, tableNumbers: unmatched }),
+      )
+    : Effect.succeed(
+        tables.filter((table) =>
+          request.tableNumbers.some((tableNumber) =>
+            titleNamesTable(table.tableTitle, tableNumber),
+          ),
+        ),
+      );
+};
 
 /** The tables a catalogue request reads, from the latest release. */
 const catalogueTables = (

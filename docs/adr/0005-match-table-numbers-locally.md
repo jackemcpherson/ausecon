@@ -15,3 +15,8 @@ never finds `Table 001`.
 Local matching compares table numbers without leading zeros and ignores case.
 It fetches every page of the catalogue rather than only the matching series,
 but gives the same result for every padding style.
+
+The read upper-cases requested table numbers before it decodes them, as it
+does for series IDs, so `x28` finds `Table X28`. The `TableNumber` schema
+keeps its upper-case letter prefix. An `APPENDIX` title names an appendix, not
+a table, so no table number matches it.
