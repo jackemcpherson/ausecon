@@ -4,6 +4,6 @@
     "types": ["node"],
     "allowImportingTsExtensions": true
   },
-  "include": ["vite.config.ts", "tools/**/*"],
+  "include": ["vite.config.ts", "packages/*/vite.config.ts", "tools/**/*"],
   "exclude": ["tools/oxlint/anti-slop/**"]
 }
