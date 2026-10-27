@@ -106,7 +106,7 @@ const wages = await Effect.runPromise(
 
 Each series carries the table as you passed it, so `tableTitle` is absent
 when you leave it out. A table without the ABS time series layout fails with
-`WorkbookLayoutError`.
+`TableLayoutError`.
 
 ## Errors
 

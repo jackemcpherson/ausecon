@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
 
-import { TableId, WorkbookLayoutError, parseTable } from "../src/index";
+import { TableId, TableLayoutError, parseTable } from "../src/index";
 import { fixtureBytes } from "./fixture-http-client";
 import { absDataSheet, syntheticTable } from "./synthetic-table";
 
@@ -37,7 +37,7 @@ describe("parseTable", () => {
     }),
   );
 
-  it.effect("fails with WorkbookLayoutError naming the table ID and sheet", () =>
+  it.effect("fails with TableLayoutError naming the table ID and sheet", () =>
     Effect.gen(function* () {
       const rows = absDataSheet([], [[46023]]).map((row, index) =>
         index === 9 ? ["Series Code"] : row,
@@ -48,7 +48,7 @@ describe("parseTable", () => {
       );
 
       expect(error).toEqual(
-        new WorkbookLayoutError({
+        new TableLayoutError({
           tableId: TABLE_634501.tableId,
           sheet: "Data1",
           reason: "Column A of row 10 is not `Series ID`.",
