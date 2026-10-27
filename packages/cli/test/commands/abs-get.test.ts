@@ -108,6 +108,27 @@ describe("ausecon abs get output", () => {
     }),
   );
 
+  it.effect(
+    "quotes a CSV field whose only special character is a line feed or carriage return",
+    () =>
+      Effect.gen(function* () {
+        const result = yield* runCli(
+          ["abs", "get", "--catalogue", "6202.0"],
+          reading([
+            { ...LOCAL, seriesDescription: "first\nsecond" },
+            { ...LOCAL, seriesDescription: "first\rsecond" },
+          ]).layer,
+        );
+
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toBe(
+          `${METADATA_HEADER}\n` +
+            '6202001,Data2,,2026-01-01,"first\nsecond",-1.5,Trend,STOCK,1,Month,A1000001A,000\n' +
+            '6202001,Data2,,2026-01-01,"first\rsecond",-1.5,Trend,STOCK,1,Month,A1000001A,000',
+        );
+      }),
+  );
+
   it.effect("writes only series ID, date, and value with --no-metadata", () =>
     Effect.gen(function* () {
       const result = yield* runCli(
