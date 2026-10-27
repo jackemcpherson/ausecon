@@ -3,7 +3,7 @@ import type { HttpClient, HttpClientError } from "effect/http";
 
 import type { Observation, WorkbookLayoutError } from "../types";
 import { absHttpClient } from "./http";
-import type { DirectoryTable } from "./time-series-directory-parse";
+import type { DirectoryTable } from "./latest-release";
 import { parseTable } from "./table-parse";
 
 /** The most tables downloaded at once. */
@@ -19,26 +19,25 @@ const DOWNLOAD_CONCURRENCY = 4;
  * @returns An Effect that yields the observations of every table, in table
  * order.
  */
-export const readTables = (
+export const readTables: (
   tables: ReadonlyArray<DirectoryTable>,
-): Effect.Effect<
+) => Effect.Effect<
   ReadonlyArray<Observation>,
   WorkbookLayoutError | HttpClientError.HttpClientError,
   HttpClient.HttpClient
-> =>
-  Effect.gen(function* () {
-    const client = yield* absHttpClient;
-    const distinct = [...new Map(tables.map((table) => [table.tableUrl, table])).values()];
+> = Effect.fn("readTables")(function* (tables: ReadonlyArray<DirectoryTable>) {
+  const client = yield* absHttpClient;
+  const distinct = [...new Map(tables.map((table) => [table.tableUrl, table])).values()];
 
-    const tableObservations = yield* Effect.forEach(
-      distinct,
-      (table) =>
-        client.get(table.tableUrl.replaceAll(" ", "+")).pipe(
-          Effect.flatMap((response) => response.arrayBuffer),
-          Effect.flatMap((body) => parseTable(new Uint8Array(body), table)),
-        ),
-      { concurrency: DOWNLOAD_CONCURRENCY },
-    );
+  const tableObservations = yield* Effect.forEach(
+    distinct,
+    (table) =>
+      client.get(table.tableUrl.replaceAll(" ", "+")).pipe(
+        Effect.flatMap((response) => response.arrayBuffer),
+        Effect.flatMap((body) => parseTable(new Uint8Array(body), table)),
+      ),
+    { concurrency: DOWNLOAD_CONCURRENCY },
+  );
 
-    return tableObservations.flat();
-  });
+  return tableObservations.flat();
+});

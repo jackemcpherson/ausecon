@@ -17,16 +17,11 @@ import {
   type WorkbookLayoutError,
 } from "../types";
 import { readTables } from "./download";
-import { titleNamesTable } from "./table-number-parse";
+import { type DirectoryTable, latestRows, tablesOf } from "./latest-release";
 import { decodeRequest } from "./request";
+import { titleNamesTable } from "./table-number-parse";
 import { fetchDirectory } from "./time-series-directory";
-import {
-  type DirectoryRow,
-  type DirectoryTable,
-  latestReleases,
-  tablesOf,
-  withTableUrl,
-} from "./time-series-directory-parse";
+import type { DirectoryRow } from "./time-series-directory-parse";
 
 /** Every error a read can fail with. */
 export type ReadAbsError =
@@ -52,21 +47,27 @@ const selectTables = (
     return Effect.succeed(tables);
   }
 
-  const unmatched = request.tableNumbers.filter(
-    (tableNumber) => !tables.some((table) => titleNamesTable(table.tableTitle, tableNumber)),
+  const matches = request.tableNumbers.map(
+    (tableNumber) =>
+      [
+        tableNumber,
+        tables.filter((table) => titleNamesTable(table.tableTitle, tableNumber)),
+      ] as const,
   );
 
-  return unmatched.length > 0
-    ? Effect.fail(
-        new TableNotFound({ catalogueNumber: request.catalogueNumber, tableNumbers: unmatched }),
-      )
-    : Effect.succeed(
-        tables.filter((table) =>
-          request.tableNumbers.some((tableNumber) =>
-            titleNamesTable(table.tableTitle, tableNumber),
-          ),
-        ),
-      );
+  const unmatched = matches.flatMap(([tableNumber, found]) =>
+    found.length === 0 ? [tableNumber] : [],
+  );
+
+  if (unmatched.length > 0) {
+    return Effect.fail(
+      new TableNotFound({ catalogueNumber: request.catalogueNumber, tableNumbers: unmatched }),
+    );
+  }
+
+  const selected = new Set(matches.flatMap(([, found]) => found));
+
+  return Effect.succeed(tables.filter((table) => selected.has(table)));
 };
 
 /** The tables a catalogue request reads, from the latest release. */
@@ -74,17 +75,17 @@ const catalogueTables = (
   request: CatalogueRequest,
 ): Effect.Effect<
   ReadonlyArray<DirectoryTable>,
-  InvalidRequest | CatalogueNotFound | TableNotFound | HttpClientError.HttpClientError,
+  CatalogueNotFound | TableNotFound | HttpClientError.HttpClientError,
   HttpClient.HttpClient
 > =>
   Effect.gen(function* () {
-    const rows = withTableUrl(yield* fetchDirectory("catno", request.catalogueNumber));
+    const rows = latestRows(yield* fetchDirectory("catno", request.catalogueNumber));
 
     if (rows.length === 0) {
       return yield* new CatalogueNotFound({ catalogueNumber: request.catalogueNumber });
     }
 
-    return yield* selectTables(request, tablesOf(latestReleases(rows)));
+    return yield* selectTables(request, tablesOf(rows));
   });
 
 const readCatalogue = (
@@ -109,10 +110,9 @@ const seriesRow = (
   fetchDirectory("sid", seriesId).pipe(
     Effect.map((rows) => [
       seriesId,
-      latestReleases(withTableUrl(rows)).reduce<DirectoryRow | undefined>(
-        (first, row) => (first === undefined || row.tableOrder < first.tableOrder ? row : first),
-        undefined,
-      ),
+      latestRows(rows)
+        .toSorted((first, second) => first.tableOrder - second.tableOrder)
+        .at(0),
     ]),
   );
 
@@ -133,31 +133,42 @@ const readSeries = (
     const rows = found.flatMap(([, row]) => (row === undefined ? [] : [row]));
     const tables = tablesOf(rows);
     const tableIds = new Map(tables.map((table) => [table.tableUrl, table.tableId]));
-    const wanted = new Set(rows.map((row) => `${tableIds.get(row.tableUrl)} ${row.seriesId}`));
+    const wanted = Map.groupBy(rows, (row) => tableIds.get(row.tableUrl));
     const observations = yield* readTables(tables);
 
-    return observations.filter((observation) =>
-      wanted.has(`${observation.tableId} ${observation.seriesId}`),
+    return observations.filter(
+      (observation) =>
+        wanted.get(observation.tableId)?.some((row) => row.seriesId === observation.seriesId) ??
+        false,
     );
   });
 
-const read = (
-  request: AbsRequest,
-): Effect.Effect<ReadonlyArray<Observation>, ReadAbsError, HttpClient.HttpClient> =>
-  decodeRequest(request).pipe(
-    Effect.flatMap(
-      Match.type<DecodedAbsRequest>().pipe(
-        Match.tag("Catalogue", readCatalogue),
-        Match.tag("Series", readSeries),
-        Match.exhaustive,
-      ),
-    ),
+const readDecoded: (
+  request: DecodedAbsRequest,
+) => Effect.Effect<ReadonlyArray<Observation>, ReadAbsError, HttpClient.HttpClient> =
+  Match.type<DecodedAbsRequest>().pipe(
+    Match.tag("Catalogue", readCatalogue),
+    Match.tag("Series", readSeries),
+    Match.exhaustive,
   );
 
 const withoutMetadata = (observation: Observation): ObservationValue => ({
   seriesId: observation.seriesId,
   date: observation.date,
   value: observation.value,
+});
+
+const read: (
+  request: AbsRequest,
+  options?: ReadOptions,
+) => Effect.Effect<
+  ReadonlyArray<Observation> | ReadonlyArray<ObservationValue>,
+  ReadAbsError,
+  HttpClient.HttpClient
+> = Effect.fn("readAbs")(function* (request: AbsRequest, options?: ReadOptions) {
+  const observations = yield* readDecoded(yield* decodeRequest(request));
+
+  return options?.metadata === false ? observations.map(withoutMetadata) : observations;
 });
 
 /**
@@ -172,8 +183,8 @@ const withoutMetadata = (observation: Observation): ObservationValue => ({
  * the library can follow them.
  *
  * @param request - What to read.
- * @param options - Set `metadata: false` to return only series ID, date, and
- * value.
+ * @param options - Set `metadata: false` to return only series ID, date,
+ * and value.
  * @returns An Effect that yields the observations.
  *
  * @example
@@ -205,7 +216,5 @@ export function readAbs(
   ReadAbsError,
   HttpClient.HttpClient
 > {
-  return options?.metadata === false
-    ? read(request).pipe(Effect.map((observations) => observations.map(withoutMetadata)))
-    : read(request);
+  return read(request, options);
 }

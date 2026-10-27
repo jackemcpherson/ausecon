@@ -34,9 +34,11 @@ const normalise: (request: AbsRequest) => AbsRequest = AbsRequest.$match({
  * @returns An Effect that yields the decoded request, or fails with
  * `InvalidRequest`.
  */
-export const decodeRequest = (
+export const decodeRequest: (
   request: AbsRequest,
-): Effect.Effect<DecodedAbsRequest, InvalidRequest> =>
-  Schema.decodeUnknownEffect(DecodedAbsRequest)(normalise(request)).pipe(
-    Effect.mapError((error) => new InvalidRequest({ message: error.message })),
-  );
+) => Effect.Effect<DecodedAbsRequest, InvalidRequest> = Effect.fn("decodeRequest")(
+  function* (request: AbsRequest) {
+    return yield* Schema.decodeUnknownEffect(DecodedAbsRequest)(normalise(request));
+  },
+  Effect.mapError((error) => new InvalidRequest({ message: error.message })),
+);

@@ -54,30 +54,29 @@ const decodeError = (
  * @param value - The decoded catalogue number or series ID.
  * @returns An Effect that yields the rows of every page, in page order.
  */
-export const fetchDirectory = (
+export const fetchDirectory: (
   query: DirectoryQuery,
   value: string,
-): Effect.Effect<
+) => Effect.Effect<
   ReadonlyArray<DirectoryRow>,
   HttpClientError.HttpClientError,
   HttpClient.HttpClient
-> =>
-  Effect.gen(function* () {
-    const client = yield* absHttpClient;
+> = Effect.fn("fetchDirectory")(function* (query: DirectoryQuery, value: string) {
+  const client = yield* absHttpClient;
 
-    const request = HttpClientRequest.get(DIRECTORY_URL).pipe(
-      HttpClientRequest.setUrlParam(query, value),
-    );
+  const request = HttpClientRequest.get(DIRECTORY_URL).pipe(
+    HttpClientRequest.setUrlParam(query, value),
+  );
 
-    const firstPage = yield* fetchPage(client, request);
-    const pageNumbers = Array.from({ length: firstPage.pageCount - 1 }, (_, index) => index + 2);
+  const firstPage = yield* fetchPage(client, request);
+  const pageNumbers = Array.from({ length: firstPage.pageCount - 1 }, (_, index) => index + 2);
 
-    const otherPages = yield* Effect.forEach(
-      pageNumbers,
-      (pageNumber) =>
-        fetchPage(client, request.pipe(HttpClientRequest.setUrlParam("pg", `${pageNumber}`))),
-      { concurrency: PAGE_CONCURRENCY },
-    );
+  const otherPages = yield* Effect.forEach(
+    pageNumbers,
+    (pageNumber) =>
+      fetchPage(client, request.pipe(HttpClientRequest.setUrlParam("pg", `${pageNumber}`))),
+    { concurrency: PAGE_CONCURRENCY },
+  );
 
-    return [firstPage, ...otherPages].flatMap((page) => page.rows);
-  });
+  return [firstPage, ...otherPages].flatMap((page) => page.rows);
+});
