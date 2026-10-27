@@ -85,7 +85,7 @@ const isDataSheet = (sheetName: string): boolean =>
 
 /** The zero-based rows from `first` to `last`, inclusive. */
 const rowsBetween = (first: number, last: number): ReadonlyArray<number> =>
-  Array.from({ length: Math.max(last - first + 1, 0) }, (_, index) => first + index);
+  Array.from({ length: last - first + 1 }, (_, index) => first + index);
 
 /**
  * Check that a sheet has the ABS time series layout.
