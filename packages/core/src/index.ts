@@ -14,6 +14,7 @@ export {
   SeriesNotFound,
   SeriesRequest,
   TableNotFound,
+  TableId,
   TableNumber,
   WorkbookLayoutError,
 } from "./types";

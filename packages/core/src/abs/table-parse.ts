@@ -1,11 +1,11 @@
 import { Effect, Option, Struct } from "effect";
 import { type CellObject, type WorkSheet, read, utils } from "xlsx";
 
-import { type Observation, WorkbookLayoutError } from "../types";
+import { type Observation, type TableId, WorkbookLayoutError } from "../types";
 
 /** The table ID and title that each observation of a table carries. */
 export interface TableLabels {
-  readonly tableId: string;
+  readonly tableId: TableId;
   readonly tableTitle: string;
 }
 

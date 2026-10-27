@@ -35,6 +35,15 @@ export const TableNumber = Schema.String.pipe(
 export type TableNumber = typeof TableNumber.Type;
 
 /**
+ * An ABS table ID: the file name of a table without its extension, such as
+ * `6202001` or `62020x28`.
+ */
+export const TableId = Schema.String.pipe(Schema.brand("TableId"));
+
+/** An ABS table ID. */
+export type TableId = typeof TableId.Type;
+
+/**
  * A request to read ABS time series, as the caller writes it.
  *
  * The `Catalogue` variant reads the latest release of a catalogue number,
@@ -101,7 +110,7 @@ export interface ReadOptions {
  * The fields are the 12 `readabs` columns in camelCase, in the same order.
  */
 export const Observation = Schema.Struct({
-  tableId: Schema.String,
+  tableId: TableId,
   sheet: Schema.String,
   tableTitle: Schema.String,
   date: Schema.String,
@@ -168,7 +177,7 @@ export class SeriesNotFound extends Schema.TaggedError<SeriesNotFound>()("Series
 export class WorkbookLayoutError extends Schema.TaggedError<WorkbookLayoutError>()(
   "WorkbookLayoutError",
   {
-    tableId: Schema.String,
+    tableId: TableId,
     sheet: Schema.optionalKey(Schema.String),
     reason: Schema.String,
   },

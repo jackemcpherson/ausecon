@@ -1,8 +1,9 @@
+import { TableId } from "../types";
 import type { DirectoryRow } from "./time-series-directory-parse";
 
 /** One table of a release, as the Time Series Directory lists it. */
 export interface DirectoryTable {
-  readonly tableId: string;
+  readonly tableId: TableId;
   readonly tableTitle: string;
   readonly tableUrl: string;
 }
@@ -31,11 +32,13 @@ export const latestRows = (rows: ReadonlyArray<DirectoryRow>): ReadonlyArray<Dir
 };
 
 /** The file name of a table URL without its extension. */
-const tableIdOf = (tableUrl: string): string =>
-  tableUrl
-    .replace(/[?#].*$/, "")
-    .replace(/^.*\//, "")
-    .replace(/\.[^.]*$/, "");
+const tableIdOf = (tableUrl: string): TableId =>
+  TableId.make(
+    tableUrl
+      .replace(/[?#].*$/, "")
+      .replace(/^.*\//, "")
+      .replace(/\.[^.]*$/, ""),
+  );
 
 /**
  * List the distinct tables of directory rows, in row order.
