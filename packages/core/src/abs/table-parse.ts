@@ -53,9 +53,10 @@ type MetadataRows = Readonly<Record<MetadataField, number>>;
 interface DataSheet {
   readonly name: string;
   readonly sheet: WorkSheet;
-  readonly lastRow: number;
   readonly lastColumn: number;
   readonly metadataRows: MetadataRows;
+  /** The zero-based row and ISO date of each period. */
+  readonly periods: ReadonlyArray<readonly [number, string]>;
 }
 
 const cellAt = (sheet: WorkSheet, row: number, column: number): CellObject | undefined => {
@@ -72,6 +73,16 @@ const cellNumber = (cell: CellObject | undefined): number | undefined =>
 /** Convert an Excel serial day number to an ISO `YYYY-MM-DD` date in UTC. */
 const excelSerialToIsoDate = (serial: number): string =>
   new Date(EXCEL_EPOCH + Math.floor(serial) * MILLISECONDS_PER_DAY).toISOString().slice(0, 10);
+
+/** Whether column A text is a note that `readabs` drops, such as `Trend Break` or `see ...`. */
+const isNote = (text: string): boolean => text.includes("Trend Break") || text.includes("see");
+
+/** Whether a column A cell below row 10 is neither a date, blank, nor a note. */
+const isUnexpectedRowLabel = (cell: CellObject | undefined): boolean => {
+  const text = cellText(cell).trim();
+
+  return cell?.t !== "n" && text !== "" && !isNote(text);
+};
 
 /** Whether `readabs` reads a sheet as data. */
 const isDataSheet = (sheetName: string): boolean =>
@@ -121,30 +132,37 @@ const checkLayout = (
 
   const range = utils.decode_range(ref);
 
+  const rows = Array.from(
+    { length: Math.max(range.e.r - FIRST_OBSERVATION_ROW + 1, 0) },
+    (_, index) => FIRST_OBSERVATION_ROW + index,
+  );
+
+  const unexpectedRow = rows.find((row) => isUnexpectedRowLabel(cellAt(sheet, row, 0)));
+
+  if (unexpectedRow !== undefined) {
+    return Effect.fail(
+      layoutError(
+        `Cell A${unexpectedRow + 1} holds \`${cellText(cellAt(sheet, unexpectedRow, 0))}\`, which is not a date, a blank, or a note.`,
+      ),
+    );
+  }
+
   return Effect.succeed({
     name,
     sheet,
-    lastRow: range.e.r,
     lastColumn: range.e.c,
     metadataRows,
+    periods: rows.flatMap((row) => {
+      const serial = cellNumber(cellAt(sheet, row, 0));
+
+      return serial === undefined ? [] : [[row, excelSerialToIsoDate(serial)] as const];
+    }),
   });
 };
 
 /** Read the observations of one checked data sheet. */
 const sheetObservations = (data: DataSheet, table: TableLabels): ReadonlyArray<Observation> => {
   const { sheet, metadataRows } = data;
-  const dates = new Map<number, string>();
-
-  for (let row = FIRST_OBSERVATION_ROW; row <= data.lastRow; row += 1) {
-    // Only a date in column A marks a period. A text note, such as
-    // `Trend Break` or `see ...`, is not one.
-    const serial = cellNumber(cellAt(sheet, row, 0));
-
-    if (serial !== undefined) {
-      dates.set(row, excelSerialToIsoDate(serial));
-    }
-  }
-
   const observations: Array<Observation> = [];
 
   for (let column = 1; column <= data.lastColumn; column += 1) {
@@ -164,7 +182,7 @@ const sheetObservations = (data: DataSheet, table: TableLabels): ReadonlyArray<O
     const frequency = metadata("frequency");
     const unit = metadata("unit");
 
-    for (const [row, date] of dates) {
+    for (const [row, date] of data.periods) {
       const value = cellNumber(cellAt(sheet, row, column));
 
       if (value !== undefined) {
@@ -193,9 +211,10 @@ const sheetObservations = (data: DataSheet, table: TableLabels): ReadonlyArray<O
  * Read the observations of an ABS time series table.
  *
  * Skips the sheets `readabs` skips. Each data sheet must have `Series ID` in
- * column A of row 10. Rows without a date in column A, such as `Trend Break`
- * notes, and blank or text value cells are left out. Dates come from Excel
- * serial numbers, which is how `.xlsx` stores date cells.
+ * column A of row 10. Below it, column A holds a date, a blank, or a note that
+ * contains `Trend Break` or `see`; any other text fails the read. Rows with a
+ * blank or a note, and blank or text value cells, are left out. Dates come
+ * from Excel serial numbers, which is how `.xlsx` stores date cells.
  *
  * @param bytes - The `.xlsx` file contents.
  * @param table - The table ID and title to put on each observation.

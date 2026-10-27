@@ -128,6 +128,7 @@ describe("readAbs on a synthetic release", () => {
               [45992, 99.5, null, 1],
               ["Trend Break", 1, 1, 1],
               ["see Explanatory Notes", 2, 2, 1],
+              [null, 3, 3, 1],
               [46023, null, 101.25, 1],
               [46054, "np", 102, 1],
               [46082.75, 103, 103, 1],
@@ -176,6 +177,30 @@ describe("readAbs on a synthetic release", () => {
           .filter((observation) => observation.tableId === "123401")
           .map((observation) => observation.sheet),
       ).toEqual(["Data table 1"]);
+    }),
+  );
+
+  it.effect("fails with WorkbookLayoutError when column A holds text that is not a note", () =>
+    Effect.gen(function* () {
+      const table1 = syntheticTable([
+        ["Data1", absDataSheet([INDEX_SERIES], [[46023, 100]])],
+        [
+          "Data2",
+          absDataSheet(
+            [INDEX_SERIES],
+            [
+              [46023, 100],
+              ["Total", 200],
+            ],
+          ),
+        ],
+      ]);
+
+      const error = yield* readSynthetic(table1).pipe(Effect.flip);
+
+      expect(error._tag).toBe("WorkbookLayoutError");
+      expect(error).toMatchObject({ tableId: "123401", sheet: "Data2" });
+      expect(error).toHaveProperty("reason", expect.stringContaining("A12"));
     }),
   );
 
