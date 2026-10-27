@@ -23,6 +23,21 @@ export const USER_AGENT = "ausecon (+https://github.com/jackemcpherson/ausecon)"
 export const ABS_CONCURRENCY = 4;
 
 /**
+ * Describe the error under a failed request. `fetch` in Node nests the
+ * network error one level down, so its own message is only "fetch failed":
+ * the nested message follows it.
+ */
+const causeMessage = (cause: unknown): string => {
+  if (!Predicate.isError(cause)) {
+    return "The request got no response.";
+  }
+
+  return Predicate.isError(cause.cause)
+    ? `${cause.message}: ${cause.cause.message}`
+    : cause.message;
+};
+
+/**
  * Turn an Effect HTTP client error into the library's own failure, so that no
  * `effect/http` type leaves the library. Only a status error carries a status:
  * a body that fails to arrive is a missing response.
@@ -30,7 +45,7 @@ export const ABS_CONCURRENCY = 4;
  * A status error's detail names the status. Effect describes every status
  * error alike, so its description adds nothing. Any other detail is the error
  * description, or the message of the underlying error, such as the `fetch`
- * failure. The tool shows the detail as it is.
+ * failure and its nested cause. The tool shows the detail as it is.
  */
 const unavailable = (url: string, error: HttpClientError.HttpClientError): AbsUnavailable =>
   Match.value(error.reason).pipe(
@@ -47,11 +62,7 @@ const unavailable = (url: string, error: HttpClientError.HttpClientError): AbsUn
       (reason) =>
         new AbsUnavailable({
           url,
-          detail:
-            reason.description ??
-            (Predicate.isError(reason.cause)
-              ? reason.cause.message
-              : "The request got no response."),
+          detail: reason.description ?? causeMessage(reason.cause),
         }),
     ),
   );

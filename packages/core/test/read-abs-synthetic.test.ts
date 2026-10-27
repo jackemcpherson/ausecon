@@ -467,4 +467,32 @@ describe("readAbs edge responses", () => {
       expect(error).toHaveProperty("detail", "getaddrinfo ENOTFOUND abs.gov.au");
     }),
   );
+
+  it.effect("adds the nested cause to the fetch error message", () =>
+    Effect.gen(function* () {
+      const offline = Layer.succeed(
+        HttpClient.HttpClient,
+        HttpClient.make((request) =>
+          Effect.fail(
+            new HttpClientError.HttpClientError({
+              reason: new HttpClientError.TransportError({
+                request,
+                cause: new TypeError("fetch failed", {
+                  cause: new Error("getaddrinfo ENOTFOUND abs.gov.au"),
+                }),
+              }),
+            }),
+          ),
+        ),
+      );
+
+      const error = yield* readAbs(AbsRequest.Catalogue({ catalogueNumber: "1234.0" })).pipe(
+        Effect.flip,
+        Effect.provide(offline),
+      );
+
+      expect(error._tag).toBe("AbsUnavailable");
+      expect(error).toHaveProperty("detail", "fetch failed: getaddrinfo ENOTFOUND abs.gov.au");
+    }),
+  );
 });
