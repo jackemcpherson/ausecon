@@ -18,5 +18,6 @@ but gives the same result for every padding style.
 
 The read upper-cases requested table numbers before it decodes them, as it
 does for series IDs, so `x28` finds `Table X28`. The `TableNumber` schema
-keeps its upper-case letter prefix. An `APPENDIX` title names an appendix, not
-a table, so no table number matches it.
+keeps its upper-case letter prefix. The match reads no table number from an
+`APPENDIX` title, because a table number cannot name an appendix. So
+`APPENDIX 2` never matches table `2`.
