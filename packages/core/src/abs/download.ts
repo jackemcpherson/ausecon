@@ -1,8 +1,8 @@
 import { Effect } from "effect";
-import type { HttpClient, HttpClientError } from "effect/http";
+import type { HttpClient } from "effect/http";
 
-import type { Series, WorkbookLayoutError } from "../types";
-import { absHttpClient } from "./http";
+import type { AbsUnavailable, Series, TableLayoutError } from "../types";
+import { fetchBytes } from "./http";
 import type { DirectoryTable } from "./latest-release";
 import { parseTable } from "./table-parse";
 
@@ -29,20 +29,18 @@ export const readTables: (
   tables: ReadonlyArray<DirectoryTable>,
 ) => Effect.Effect<
   ReadonlyArray<TableSeries>,
-  WorkbookLayoutError | HttpClientError.HttpClientError,
+  TableLayoutError | AbsUnavailable,
   HttpClient.HttpClient
 > = Effect.fn("readTables")(function* (tables: ReadonlyArray<DirectoryTable>) {
-  const client = yield* absHttpClient;
   const distinct = [...new Map(tables.map((table) => [table.tableUrl, table])).values()];
 
   return yield* Effect.forEach(
     distinct,
     (table) =>
-      client.get(table.tableUrl.replaceAll(" ", "+")).pipe(
-        Effect.flatMap((response) => response.arrayBuffer),
+      fetchBytes(table.tableUrl.replaceAll(" ", "+")).pipe(
         // The Table names no URL, so the series do not carry it.
         Effect.flatMap((body) =>
-          parseTable(new Uint8Array(body), {
+          parseTable(body, {
             tableId: table.tableId,
             tableTitle: table.tableTitle,
           }),

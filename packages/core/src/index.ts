@@ -2,6 +2,7 @@ export { readAbs, type ReadAbsError } from "./abs/time-series";
 
 export {
   AbsRequest,
+  AbsUnavailable,
   CatalogueNotFound,
   CatalogueNumber,
   InvalidRequest,
@@ -13,5 +14,6 @@ export {
   TableId,
   TableNotFound,
   TableNumber,
-  WorkbookLayoutError,
+  TimeSeriesDirectoryError,
+  TableLayoutError,
 } from "./types";

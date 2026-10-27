@@ -365,7 +365,7 @@ describe("ausecon abs get failures", () => {
     }),
   );
 
-  it.effect("exits 4 with nothing on stdout when a table download fails", () =>
+  it.effect("exits 4, names the URL, and suggests trying later when the ABS answers 404", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(
         wagePriceIndexWith(TABLE_1_URL, { status: 404, body: "<html>Page not found</html>" }),
@@ -375,34 +375,40 @@ describe("ausecon abs get failures", () => {
 
       expect(result.exitCode).toBe(4);
       expect(result.stdout).toBe("");
-      expect(result.stderr).toContain("404");
-      expect(result.stderr).toContain("Try again later");
-      expect(result.stderr).not.toContain("network connection");
-    }),
-  );
-
-  it.effect("exits 4 and points at the network when a request cannot be sent", () =>
-    Effect.gen(function* () {
-      const offline = Layer.succeed(
-        HttpClient.HttpClient,
-        HttpClient.make((request) =>
-          Effect.fail(
-            new HttpClientError.HttpClientError({
-              reason: new HttpClientError.TransportError({ request, description: "offline" }),
-            }),
-          ),
-        ),
+      expect(result.stderr).toBe(
+        `ausecon: The ABS answered ${TABLE_1_URL} with status 404.\n` +
+          "Try again later. The ABS website may be down, or the data may have moved: if the error stays, report it at https://github.com/jackemcpherson/ausecon/issues.",
       );
-
-      const result = yield* runCli(["abs", "get", "--catalogue", "6345.0"], offline);
-
-      expect(result.exitCode).toBe(4);
-      expect(result.stdout).toBe("");
-      expect(result.stderr).toContain("Check your network connection");
     }),
   );
 
-  it.effect("exits 4 and asks for a report when the directory answers with an error", () =>
+  it.effect(
+    "exits 4, names the URL, and points at the network when a request gets no response",
+    () =>
+      Effect.gen(function* () {
+        const offline = Layer.succeed(
+          HttpClient.HttpClient,
+          HttpClient.make((request) =>
+            Effect.fail(
+              new HttpClientError.HttpClientError({
+                reason: new HttpClientError.TransportError({ request, description: "offline" }),
+              }),
+            ),
+          ),
+        );
+
+        const result = yield* runCli(["abs", "get", "--catalogue", "6345.0"], offline);
+
+        expect(result.exitCode).toBe(4);
+        expect(result.stdout).toBe("");
+        expect(result.stderr).toBe(
+          `ausecon: Could not reach the ABS at ${directoryUrl({ catno: "6345.0" })}: offline\n` +
+            "Check your network connection, then try again. The ABS website may be down.",
+        );
+      }),
+  );
+
+  it.effect("exits 1 and asks for a report when the directory answers with an error document", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(
         wagePriceIndexWith(
@@ -413,14 +419,19 @@ describe("ausecon abs get failures", () => {
 
       const result = yield* runCli(["abs", "get", "--catalogue", "6345.0"], http.layer);
 
-      expect(result.exitCode).toBe(4);
+      expect(result.exitCode).toBe(1);
       expect(result.stdout).toBe("");
-      expect(result.stderr).toContain("github.com/jackemcpherson/ausecon/issues");
+      expect(result.stderr).toContain(
+        `ausecon: The Time Series Directory response from ${directoryUrl({ catno: "6345.0" })} is not a series index: The Time Series Directory answered: Invalid query.`,
+      );
+      expect(result.stderr).toContain(
+        "Report this at https://github.com/jackemcpherson/ausecon/issues with the command you ran.",
+      );
       expect(result.stderr).not.toContain("network connection");
     }),
   );
 
-  it.effect("exits 1 when a table does not have the time series layout", () =>
+  it.effect("exits 1 and asks for a report when a table cannot be opened as .xlsx", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(
         wagePriceIndexWith(TABLE_1_URL, {
@@ -434,11 +445,26 @@ describe("ausecon abs get failures", () => {
       expect(result.exitCode).toBe(1);
       expect(result.stdout).toBe("");
       expect(result.stderr).toContain("Table 634501 does not have the ABS time series layout");
-      expect(result.stderr).toContain("github.com/jackemcpherson/ausecon/issues");
+      expect(result.stderr).toContain(
+        "Report this at https://github.com/jackemcpherson/ausecon/issues with the command you ran.",
+      );
     }),
   );
 
-  it.effect("names the table ID and sheet when a sheet does not have the layout", () =>
+  it.effect("exits 1 and reports a fault when the read fails unexpectedly", () =>
+    Effect.gen(function* () {
+      const result = yield* runCli(["abs", "get", "--catalogue", "6345.0"], noRequests.layer);
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toContain("ausecon: failed unexpectedly.");
+      expect(result.stderr).toContain(
+        "Report this at https://github.com/jackemcpherson/ausecon/issues.",
+      );
+    }),
+  );
+
+  it.effect("exits 1 and names the table ID and sheet when a sheet lacks Series ID", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(
         wagePriceIndexWith(TABLE_1_URL, {
@@ -452,8 +478,9 @@ describe("ausecon abs get failures", () => {
       expect(result.exitCode).toBe(1);
       expect(result.stdout).toBe("");
       expect(result.stderr).toContain(
-        "Table 634501, sheet Data1, does not have the ABS time series layout",
+        "Table 634501, sheet Data1, does not have the ABS time series layout: Column A of row 10 is not `Series ID`.",
       );
+      expect(result.stderr).toContain("github.com/jackemcpherson/ausecon/issues");
     }),
   );
 });

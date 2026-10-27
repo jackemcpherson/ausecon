@@ -177,15 +177,35 @@ export class SeriesNotFound extends Schema.TaggedError<SeriesNotFound>()("Series
 }) {}
 
 /**
+ * A request to the ABS got no response, or a status outside 2xx.
+ *
+ * `status` is present when the ABS answered. `cause` describes the failure.
+ */
+export class AbsUnavailable extends Schema.TaggedError<AbsUnavailable>()("AbsUnavailable", {
+  url: Schema.String,
+  status: Schema.optionalKey(Schema.Number),
+  cause: Schema.String,
+}) {}
+
+/**
+ * A Time Series Directory response is not a series index: an error document,
+ * malformed XML, or an unexpected layout.
+ */
+export class TimeSeriesDirectoryError extends Schema.TaggedError<TimeSeriesDirectoryError>()(
+  "TimeSeriesDirectoryError",
+  {
+    url: Schema.String,
+    reason: Schema.String,
+  },
+) {}
+
+/**
  * A table does not have the ABS time series layout.
  *
  * `sheet` is absent when the table cannot be opened as `.xlsx` at all.
  */
-export class WorkbookLayoutError extends Schema.TaggedError<WorkbookLayoutError>()(
-  "WorkbookLayoutError",
-  {
-    tableId: TableId,
-    sheet: Schema.optionalKey(Schema.String),
-    reason: Schema.String,
-  },
-) {}
+export class TableLayoutError extends Schema.TaggedError<TableLayoutError>()("TableLayoutError", {
+  tableId: TableId,
+  sheet: Schema.optionalKey(Schema.String),
+  reason: Schema.String,
+}) {}

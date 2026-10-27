@@ -1,8 +1,9 @@
 import { Effect, Match } from "effect";
-import type { HttpClient, HttpClientError } from "effect/http";
+import type { HttpClient } from "effect/http";
 
 import {
   type AbsRequest,
+  type AbsUnavailable,
   CatalogueNotFound,
   type CatalogueRequest,
   type DecodedAbsRequest,
@@ -12,7 +13,8 @@ import {
   SeriesNotFound,
   type SeriesRequest,
   TableNotFound,
-  type WorkbookLayoutError,
+  type TimeSeriesDirectoryError,
+  type TableLayoutError,
 } from "../types";
 import { readTables } from "./download";
 import { type DirectoryTable, latestRows, tablesOf } from "./latest-release";
@@ -27,8 +29,9 @@ export type ReadAbsError =
   | CatalogueNotFound
   | TableNotFound
   | SeriesNotFound
-  | WorkbookLayoutError
-  | HttpClientError.HttpClientError;
+  | TableLayoutError
+  | TimeSeriesDirectoryError
+  | AbsUnavailable;
 
 /**
  * Limit the tables of a catalogue number to the requested table numbers.
@@ -73,7 +76,7 @@ const catalogueTables = (
   request: CatalogueRequest,
 ): Effect.Effect<
   ReadonlyArray<DirectoryTable>,
-  CatalogueNotFound | TableNotFound | HttpClientError.HttpClientError,
+  CatalogueNotFound | TableNotFound | TimeSeriesDirectoryError | AbsUnavailable,
   HttpClient.HttpClient
 > =>
   Effect.gen(function* () {
@@ -105,7 +108,7 @@ const seriesRow = (
   seriesId: SeriesId,
 ): Effect.Effect<
   readonly [SeriesId, DirectoryRow | undefined],
-  HttpClientError.HttpClientError,
+  TimeSeriesDirectoryError | AbsUnavailable,
   HttpClient.HttpClient
 > =>
   fetchDirectory("sid", seriesId).pipe(

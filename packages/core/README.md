@@ -97,12 +97,17 @@ error channel holds one of these tagged errors:
 - `TableNotFound`: the catalogue number has no table with a requested table
   number.
 - `SeriesNotFound`: the Time Series Directory has no record of a series ID.
-- `WorkbookLayoutError`: a table does not have the ABS time series
-  layout.
-- `HttpClientError`: a request failed or the ABS answered with a status
-  outside 2xx.
+- `TableLayoutError`: a table does not have the ABS time series layout.
+- `TimeSeriesDirectoryError`: a Time Series Directory response is not a
+  series index, such as an error document or malformed XML. It names the URL
+  and the reason.
+- `AbsUnavailable`: a request to the ABS got no response, or a status outside
+  2xx. It names the URL, the status if the ABS answered, and the cause.
 
-`WorkbookLayoutError` names the table ID and, when a sheet fails the check,
+Every error is a type the library defines. No `effect/http` error reaches
+the error channel.
+
+`TableLayoutError` names the table ID and, when a sheet fails the check,
 the sheet. A file that does not open as `.xlsx` gives the error without a
 sheet. Each data sheet must hold `Series ID` in column A of row 10, and the
 five metadata labels `Unit`, `Series Type`, `Data Type`, `Frequency`, and

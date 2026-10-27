@@ -104,13 +104,13 @@ describe("readAbs Time Series Directory lookup", () => {
   ];
 
   for (const [name, body, message] of undecodableBodies) {
-    it.effect(`fails with an HttpClientError decode error for ${name}`, () =>
+    it.effect(`fails with TimeSeriesDirectoryError for ${name}`, () =>
       Effect.gen(function* () {
         const error = yield* readCatalogueWithDirectoryBody(body);
 
-        expect(error._tag).toBe("HttpClientError");
-        expect(error).toHaveProperty("reason._tag", "DecodeError");
-        expect(error.message).toContain(message);
+        expect(error._tag).toBe("TimeSeriesDirectoryError");
+        expect(error).toHaveProperty("url", directoryUrl({ catno: "6345.0" }));
+        expect(error).toHaveProperty("reason", expect.stringContaining(message));
       }),
     );
   }

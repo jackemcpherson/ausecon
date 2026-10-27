@@ -1,7 +1,7 @@
 import { Effect, Option, Schema, Struct } from "effect";
 import { type CellObject, type WorkSheet, read, utils } from "xlsx";
 
-import { type Series, SeriesId, type Table, WorkbookLayoutError } from "../types";
+import { type Series, SeriesId, type Table, TableLayoutError } from "../types";
 
 /** Sheets that `readabs` skips by exact name. */
 const SKIPPED_SHEETS = new Set([
@@ -99,9 +99,9 @@ const checkLayout = (
   sheet: WorkSheet,
   name: string,
   table: Table,
-): Effect.Effect<DataSheet, WorkbookLayoutError> => {
-  const layoutError = (reason: string): Effect.Effect<never, WorkbookLayoutError> =>
-    Effect.fail(new WorkbookLayoutError({ tableId: table.tableId, sheet: name, reason }));
+): Effect.Effect<DataSheet, TableLayoutError> => {
+  const layoutError = (reason: string): Effect.Effect<never, TableLayoutError> =>
+    Effect.fail(new TableLayoutError({ tableId: table.tableId, sheet: name, reason }));
 
   const ref = sheet["!ref"];
 
@@ -160,7 +160,7 @@ const checkLayout = (
       Effect.map((seriesId) => [column, seriesId] as const),
       Effect.mapError(
         () =>
-          new WorkbookLayoutError({
+          new TableLayoutError({
             tableId: table.tableId,
             sheet: name,
             reason: `Cell ${utils.encode_cell({ r: SERIES_ID_ROW, c: column })} holds \`${text}\`, which is not a series ID.`,
@@ -218,19 +218,19 @@ const sheetSeries = (data: DataSheet, table: Table): ReadonlyArray<Series> => {
  * @param bytes - The `.xlsx` file contents.
  * @param table - The Table to put on each series.
  * @returns An Effect that yields the series in sheet order, then column order,
- * or fails with `WorkbookLayoutError`.
+ * or fails with `TableLayoutError`.
  */
 export const parseTable: (
   bytes: Uint8Array,
   table: Table,
-) => Effect.Effect<ReadonlyArray<Series>, WorkbookLayoutError> = Effect.fn("parseTable")(function* (
+) => Effect.Effect<ReadonlyArray<Series>, TableLayoutError> = Effect.fn("parseTable")(function* (
   bytes: Uint8Array,
   table: Table,
 ) {
   const file = yield* Effect.try({
     try: () => read(bytes, { type: "array", cellDates: false, cellHTML: false }),
     catch: (cause) =>
-      new WorkbookLayoutError({
+      new TableLayoutError({
         tableId: table.tableId,
         reason: `The table cannot be opened as .xlsx: ${String(cause)}`,
       }),

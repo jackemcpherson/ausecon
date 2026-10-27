@@ -1,7 +1,6 @@
-import type { ReadAbsError, WorkbookLayoutError } from "@ausecon/core";
+import type { AbsUnavailable, ReadAbsError, TableLayoutError } from "@ausecon/core";
 import { Cause, Exit, Match, Option } from "effect";
 import { CliError, type CliOutput } from "effect/cli";
-import type { HttpClientError } from "effect/http";
 
 /** Exit codes of the tool. */
 export const EXIT_CODE = {
@@ -9,7 +8,7 @@ export const EXIT_CODE = {
   failure: 1,
   usage: 2,
   notFound: 3,
-  network: 4,
+  unavailable: 4,
 } as const;
 
 /** Every error a command can fail with. */
@@ -31,36 +30,30 @@ const USAGE_HINT = "Run `ausecon abs get --help` for usage and examples.";
 const ISSUES = "https://github.com/jackemcpherson/ausecon/issues";
 
 /** The table, and the sheet if known, that a layout error names. */
-const layoutSubject = (error: WorkbookLayoutError): string =>
+const layoutSubject = (error: TableLayoutError): string =>
   error.sheet === undefined
     ? `Table ${error.tableId}`
     : `Table ${error.tableId}, sheet ${error.sheet},`;
 
+const REPORT_IT = `Report this at ${ISSUES} with the command you ran.`;
+
 /**
- * The next step for an HTTP failure. Only a transport error points at the
- * network. A status code means the ABS answered, and a response the tool
- * cannot read is a fault to report.
+ * Describe an ABS request that failed. A status means the ABS answered, so
+ * the next step is to wait or report moved data. No status points at the
+ * network.
  */
-const httpNextStep: (reason: HttpClientError.HttpClientErrorReason) => string =
-  Match.type<HttpClientError.HttpClientErrorReason>().pipe(
-    Match.tag(
-      "TransportError",
-      () => "Check your network connection, then try again. The ABS website may be down.",
-    ),
-    Match.tag(
-      "StatusCodeError",
-      () =>
+const describeUnavailable = (error: AbsUnavailable): Outcome =>
+  error.status === undefined
+    ? outcome(
+        EXIT_CODE.unavailable,
+        `Could not reach the ABS at ${error.url}: ${error.cause}`,
+        "Check your network connection, then try again. The ABS website may be down.",
+      )
+    : outcome(
+        EXIT_CODE.unavailable,
+        `The ABS answered ${error.url} with status ${error.status}.`,
         `Try again later. The ABS website may be down, or the data may have moved: if the error stays, report it at ${ISSUES}.`,
-    ),
-    Match.tag(
-      "DecodeError",
-      "EmptyBodyError",
-      "EncodeError",
-      "InvalidUrlError",
-      () => `Report this at ${ISSUES} with the command you ran.`,
-    ),
-    Match.exhaustive,
-  );
+      );
 
 /** Describe a command-line usage error, or a help request, for a terminal user. */
 const describeCliError = (
@@ -108,18 +101,19 @@ const describeReadError: (error: ReadAbsError) => Outcome = Match.type<ReadAbsEr
       "Check the series ID in the ABS table that holds it.",
     ),
   ),
-  Match.tag("HttpClientError", (error) =>
+  Match.tag("AbsUnavailable", describeUnavailable),
+  Match.tag("TimeSeriesDirectoryError", (error) =>
     outcome(
-      EXIT_CODE.network,
-      `Could not read from the ABS: ${error.message}`,
-      httpNextStep(error.reason),
+      EXIT_CODE.failure,
+      `The Time Series Directory response from ${error.url} is not a series index: ${error.reason}`,
+      REPORT_IT,
     ),
   ),
-  Match.tag("WorkbookLayoutError", (error) =>
+  Match.tag("TableLayoutError", (error) =>
     outcome(
       EXIT_CODE.failure,
       `${layoutSubject(error)} does not have the ABS time series layout: ${error.reason}`,
-      `Report this at ${ISSUES} with the command you ran.`,
+      REPORT_IT,
     ),
   ),
   Match.exhaustive,
@@ -134,8 +128,8 @@ const describeError =
 /**
  * Decide the exit code and stderr message for a finished command.
  *
- * Usage errors exit 2, missing data 3, network and HTTP errors 4, and any
- * other failure 1.
+ * Usage errors exit 2, missing data 3, an unavailable ABS 4, and any other
+ * failure 1, including a Time Series Directory or table layout fault.
  *
  * @param exit - The result of running the command.
  * @param formatter - The help formatter, used for `effect/cli` errors.

@@ -1,12 +1,8 @@
 import { Effect } from "effect";
-import {
-  type HttpClient,
-  HttpClientError,
-  HttpClientRequest,
-  type HttpClientResponse,
-} from "effect/http";
+import type { HttpClient } from "effect/http";
 
-import { absHttpClient } from "./http";
+import { type AbsUnavailable, TimeSeriesDirectoryError } from "../types";
+import { fetchText } from "./http";
 import {
   type DirectoryPage,
   type DirectoryRow,
@@ -22,27 +18,20 @@ const PAGE_CONCURRENCY = 4;
 /** A Time Series Directory query: by catalogue number or by series ID. */
 export type DirectoryQuery = "catno" | "sid";
 
+/** The URL of one Time Series Directory page. */
+const pageUrl = (params: Readonly<Record<string, string>>): string =>
+  `${DIRECTORY_URL}?${new URLSearchParams(params).toString()}`;
+
 const fetchPage = (
-  client: HttpClient.HttpClient,
-  request: HttpClientRequest.HttpClientRequest,
-): Effect.Effect<DirectoryPage, HttpClientError.HttpClientError> =>
-  Effect.gen(function* () {
-    const response = yield* client.execute(request);
-    const xml = yield* response.text;
-
-    return yield* parseDirectoryPage(xml).pipe(
-      Effect.mapError((error) => decodeError(request, response, error.reason)),
-    );
-  });
-
-const decodeError = (
-  request: HttpClientRequest.HttpClientRequest,
-  response: HttpClientResponse.HttpClientResponse,
-  description: string,
-): HttpClientError.HttpClientError =>
-  new HttpClientError.HttpClientError({
-    reason: new HttpClientError.DecodeError({ request, response, description }),
-  });
+  url: string,
+): Effect.Effect<DirectoryPage, TimeSeriesDirectoryError | AbsUnavailable, HttpClient.HttpClient> =>
+  fetchText(url).pipe(
+    Effect.flatMap((xml) =>
+      parseDirectoryPage(xml).pipe(
+        Effect.mapError((error) => new TimeSeriesDirectoryError({ url, reason: error.reason })),
+      ),
+    ),
+  );
 
 /**
  * Fetch every Time Series Directory row for one query.
@@ -59,22 +48,15 @@ export const fetchDirectory: (
   value: string,
 ) => Effect.Effect<
   ReadonlyArray<DirectoryRow>,
-  HttpClientError.HttpClientError,
+  TimeSeriesDirectoryError | AbsUnavailable,
   HttpClient.HttpClient
 > = Effect.fn("fetchDirectory")(function* (query: DirectoryQuery, value: string) {
-  const client = yield* absHttpClient;
-
-  const request = HttpClientRequest.get(DIRECTORY_URL).pipe(
-    HttpClientRequest.setUrlParam(query, value),
-  );
-
-  const firstPage = yield* fetchPage(client, request);
+  const firstPage = yield* fetchPage(pageUrl({ [query]: value }));
   const pageNumbers = Array.from({ length: firstPage.pageCount - 1 }, (_, index) => index + 2);
 
   const otherPages = yield* Effect.forEach(
     pageNumbers,
-    (pageNumber) =>
-      fetchPage(client, request.pipe(HttpClientRequest.setUrlParam("pg", `${pageNumber}`))),
+    (pageNumber) => fetchPage(pageUrl({ [query]: value, pg: `${pageNumber}` })),
     { concurrency: PAGE_CONCURRENCY },
   );
 

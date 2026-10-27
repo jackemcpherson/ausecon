@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
+import { HttpClient, HttpClientError } from "effect/http";
 
 import { AbsRequest, readAbs } from "../src/index";
 import {
@@ -204,7 +205,7 @@ describe("readAbs on a synthetic release", () => {
     }),
   );
 
-  it.effect("fails with WorkbookLayoutError when row 10 holds text that is not a series ID", () =>
+  it.effect("fails with TableLayoutError when row 10 holds text that is not a series ID", () =>
     Effect.gen(function* () {
       const table1 = syntheticTable([
         [
@@ -215,13 +216,13 @@ describe("readAbs on a synthetic release", () => {
 
       const error = yield* readSynthetic(table1).pipe(Effect.flip);
 
-      expect(error._tag).toBe("WorkbookLayoutError");
+      expect(error._tag).toBe("TableLayoutError");
       expect(error).toMatchObject({ tableId: "123401", sheet: "Data1" });
       expect(error).toHaveProperty("reason", expect.stringContaining("C10"));
     }),
   );
 
-  it.effect("fails with WorkbookLayoutError when column A holds text that is not a note", () =>
+  it.effect("fails with TableLayoutError when column A holds text that is not a note", () =>
     Effect.gen(function* () {
       const table1 = syntheticTable([
         ["Data1", absDataSheet([INDEX_SERIES], [[46023, 100]])],
@@ -239,13 +240,13 @@ describe("readAbs on a synthetic release", () => {
 
       const error = yield* readSynthetic(table1).pipe(Effect.flip);
 
-      expect(error._tag).toBe("WorkbookLayoutError");
+      expect(error._tag).toBe("TableLayoutError");
       expect(error).toMatchObject({ tableId: "123401", sheet: "Data2" });
       expect(error).toHaveProperty("reason", expect.stringContaining("A12"));
     }),
   );
 
-  it.effect("fails with WorkbookLayoutError when row 10 does not hold Series ID", () =>
+  it.effect("fails with TableLayoutError when row 10 does not hold Series ID", () =>
     Effect.gen(function* () {
       const table1 = syntheticTable([
         ["Data1", absDataSheet([INDEX_SERIES], [[46023, 100]]).slice(1)],
@@ -253,7 +254,7 @@ describe("readAbs on a synthetic release", () => {
 
       const error = yield* readSynthetic(table1).pipe(Effect.flip);
 
-      expect(error._tag).toBe("WorkbookLayoutError");
+      expect(error._tag).toBe("TableLayoutError");
       expect(error).toMatchObject({
         tableId: "123401",
         sheet: "Data1",
@@ -261,7 +262,7 @@ describe("readAbs on a synthetic release", () => {
     }),
   );
 
-  it.effect("fails with WorkbookLayoutError when a metadata row is missing", () =>
+  it.effect("fails with TableLayoutError when a metadata row is missing", () =>
     Effect.gen(function* () {
       const rows = absDataSheet([INDEX_SERIES], [[46023, 100]]).map((row) =>
         row[0] === "Collection Month" ? ["Collection month", ...row.slice(1)] : row,
@@ -274,19 +275,19 @@ describe("readAbs on a synthetic release", () => {
         ]),
       ).pipe(Effect.flip);
 
-      expect(error._tag).toBe("WorkbookLayoutError");
+      expect(error._tag).toBe("TableLayoutError");
       expect(error).toMatchObject({ tableId: "123401", sheet: "Data2" });
       expect(error).toHaveProperty("reason", expect.stringContaining("collectionMonth"));
     }),
   );
 
-  it.effect("fails with WorkbookLayoutError when the table cannot be opened", () =>
+  it.effect("fails with TableLayoutError when the table cannot be opened", () =>
     Effect.gen(function* () {
       const error = yield* readSynthetic(
         new TextEncoder().encode("<html><body>Not found</body></html>"),
       ).pipe(Effect.flip);
 
-      expect(error._tag).toBe("WorkbookLayoutError");
+      expect(error._tag).toBe("TableLayoutError");
       expect(error).toHaveProperty("tableId", "123401");
       expect(error).not.toHaveProperty("sheet");
     }),
@@ -332,8 +333,12 @@ describe("readAbs edge responses", () => {
         Effect.provide(http.layer),
       );
 
-      expect(error._tag).toBe("HttpClientError");
-      expect(error).toHaveProperty("reason._tag", "StatusCodeError");
+      expect(error._tag).toBe("AbsUnavailable");
+      expect(error).toHaveProperty(
+        "url",
+        "https://www.abs.gov.au/statistics/economy/business-indicators/counts-australian-businesses-including-entries-and-exits/latest-release/8165ts13.xlsx",
+      );
+      expect(error).toHaveProperty("status", 404);
       expect(http.requests).toHaveLength(2);
     }),
   );
@@ -369,6 +374,31 @@ describe("readAbs edge responses", () => {
         expect.stringContaining("ausecon"),
         expect.stringContaining("ausecon"),
       ]);
+    }),
+  );
+
+  it.effect("fails with AbsUnavailable without a status when a request gets no response", () =>
+    Effect.gen(function* () {
+      const offline = Layer.succeed(
+        HttpClient.HttpClient,
+        HttpClient.make((request) =>
+          Effect.fail(
+            new HttpClientError.HttpClientError({
+              reason: new HttpClientError.TransportError({ request, description: "offline" }),
+            }),
+          ),
+        ),
+      );
+
+      const error = yield* readAbs(AbsRequest.Catalogue({ catalogueNumber: "1234.0" })).pipe(
+        Effect.flip,
+        Effect.provide(offline),
+      );
+
+      expect(error._tag).toBe("AbsUnavailable");
+      expect(error).toHaveProperty("url", directoryUrl({ catno: "1234.0" }));
+      expect(error).toHaveProperty("cause", "offline");
+      expect(error).not.toHaveProperty("status");
     }),
   );
 });
