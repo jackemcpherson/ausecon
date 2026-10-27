@@ -31,13 +31,19 @@ const oneOf =
   (tableNumber) =>
     numbers.map(comparable).includes(tableNumber);
 
+// A comparable table number with no underscore suffix, split into its parts.
+const NUMBER_PARTS = /^([A-Z]?)(\d+)([A-Z]?)$/;
+
 /**
- * The table numbers a range names. A range whose ends carry the same letters,
- * such as `01 to 17` or `2a to 9a`, names each number from one end to the
- * other. A range whose letters differ, such as `2a to 4b`, names only its two
- * ends, as ADR 0005 records.
+ * Test whether a range names a table number. A range whose ends carry the
+ * same letters, such as `01 to 17` or `2a to 9a`, names each number from one
+ * end to the other. A range whose letters differ, such as `2a to 4b`, names
+ * only its two ends, as ADR 0005 records.
+ *
+ * The test compares numbers rather than listing the range, so a title with a
+ * huge range costs no memory.
  */
-const rangeNumbers = (range: RegExpExecArray): ReadonlyArray<string> => {
+const rangeMatch = (range: RegExpExecArray): TitleMatch => {
   const [
     ,
     firstPrefix = "",
@@ -52,18 +58,21 @@ const rangeNumbers = (range: RegExpExecArray): ReadonlyArray<string> => {
   const suffix = firstSuffix.toUpperCase();
 
   if (prefix !== lastPrefix.toUpperCase() || suffix !== lastSuffix.toUpperCase()) {
-    return [
+    return oneOf([
       `${firstPrefix}${firstDigits}${firstSuffix}`,
       `${lastPrefix}${lastDigits}${lastSuffix}`,
-    ];
+    ]);
   }
 
   const first = Number(firstDigits);
+  const last = Number(lastDigits);
 
-  return Array.from(
-    { length: Math.max(Number(lastDigits) - first + 1, 0) },
-    (_, index) => `${prefix}${first + index}${suffix}`,
-  );
+  return (tableNumber) => {
+    const [, numberPrefix, digits = "", numberSuffix] = NUMBER_PARTS.exec(tableNumber) ?? [];
+    const number = Number(digits);
+
+    return numberPrefix === prefix && numberSuffix === suffix && number >= first && number <= last;
+  };
 };
 
 /** Parse the table numbers a title names into a test. */
@@ -78,7 +87,7 @@ const titleMatch = (title: string): TitleMatch => {
   const range = NUMBER_RANGE.exec(rest);
 
   if (range !== null) {
-    return oneOf(rangeNumbers(range));
+    return rangeMatch(range);
   }
 
   const list = NUMBER_LIST.exec(rest);

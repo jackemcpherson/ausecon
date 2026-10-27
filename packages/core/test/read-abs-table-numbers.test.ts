@@ -110,7 +110,7 @@ const BUSINESS_COUNTS_RELEASE =
 // recorded fixture covers.
 const SYNTHETIC_RELEASE = "https://www.abs.gov.au/synthetic/latest-release/";
 
-const SYNTHETIC_TABLES = ["567801", "567802", "567803", "567804", "567805", "567806"].map(
+const SYNTHETIC_TABLES = ["567801", "567802", "567803", "567804", "567805", "567806", "567807"].map(
   (tableId) => `${SYNTHETIC_RELEASE}${tableId}.xlsx`,
 );
 
@@ -254,6 +254,18 @@ describe("readAbs with table numbers", () => {
       expect(ends.tableIds).toEqual(["567805", "567806"]);
       expect(error._tag).toBe("TableNotFound");
       expect(error).toMatchObject({ tableNumbers: ["3B"] });
+    }),
+  );
+
+  it.effect("matches a range too long to list by comparing numbers", () =>
+    Effect.gen(function* () {
+      const { tableIds } = yield* readSynthetic(["123456789"]);
+      const error = yield* readSynthetic(["999", "1500_MTH"]).pipe(Effect.flip);
+
+      // Tables 1000 to 99999999999. A range names no underscore suffix.
+      expect(tableIds).toEqual(["567807"]);
+      expect(error._tag).toBe("TableNotFound");
+      expect(error).toMatchObject({ tableNumbers: ["999", "1500_MTH"] });
     }),
   );
 
