@@ -46,7 +46,8 @@ ABS test project.
 
 - Pin every dependency exactly. Effect and `effect/cli` are pinned because the
   CLI module is unstable.
-- Unit tests use recorded fixtures in `packages/*/test/fixtures/`.
+- Unit tests use recorded fixtures in `packages/testkit/fixtures/`, imported
+  through `@ausecon/testkit`.
 - Import from `vite-plus/test` in setup files and `@effect/vitest` in tests.
 
 ## Agent skills
