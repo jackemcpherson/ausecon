@@ -51,7 +51,7 @@ export const WAGE_PRICE_INDEX_TABLE_IDS = [
 ] as const;
 
 /**
- * Read a recorded file from `packages/core/test/fixtures/`.
+ * Read a recorded file from `packages/testkit/fixtures/`.
  *
  * @param file - The file name inside the fixtures directory.
  * @returns The file contents.

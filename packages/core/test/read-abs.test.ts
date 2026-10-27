@@ -1,5 +1,12 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
+import {
+  directoryUrl,
+  fixtureBytes,
+  fixtureHttpClient,
+  recorded,
+  wagePriceIndexResponses,
+} from "@ausecon/testkit";
 
 import {
   AbsRequest,
@@ -9,13 +16,6 @@ import {
   parseTable,
   readAbs,
 } from "../src/index";
-import {
-  directoryUrl,
-  fixtureBytes,
-  fixtureHttpClient,
-  recorded,
-  wagePriceIndexResponses,
-} from "./fixture-http-client";
 
 const readCatalogueWithDirectoryBody = (body: string) => {
   const http = fixtureHttpClient(

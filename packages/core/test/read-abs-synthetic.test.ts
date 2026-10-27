@@ -1,15 +1,17 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { HttpClient, HttpClientError } from "effect/http";
-
-import { AbsRequest, readAbs } from "../src/index";
 import {
   type RecordedResponse,
   directoryUrl,
   fixtureHttpClient,
   recorded,
-} from "./fixture-http-client";
-import { type SyntheticSeries, absDataSheet, syntheticTable } from "./synthetic-table";
+  type SyntheticSeries,
+  absDataSheet,
+  syntheticTable,
+} from "@ausecon/testkit";
+
+import { AbsRequest, readAbs } from "../src/index";
 
 // The synthetic catalogue `1234.0` has one table with a superseded and a
 // current release, one table whose URL has a space, and one row with no URL.

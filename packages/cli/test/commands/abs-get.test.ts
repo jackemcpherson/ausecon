@@ -1,7 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { HttpClient, HttpClientError } from "effect/http";
-
 import {
   type RecordedResponse,
   WAGE_PRICE_INDEX_RELEASE,
@@ -9,8 +8,10 @@ import {
   fixtureHttpClient,
   recorded,
   wagePriceIndexResponses,
-} from "../../../core/test/fixture-http-client";
-import { absDataSheet, syntheticTable } from "../../../core/test/synthetic-table";
+  absDataSheet,
+  syntheticTable,
+} from "@ausecon/testkit";
+
 import { runCli } from "../run-cli";
 
 const METADATA_HEADER =

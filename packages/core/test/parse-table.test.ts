@@ -1,9 +1,8 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
+import { fixtureBytes, absDataSheet, syntheticTable } from "@ausecon/testkit";
 
 import { TableId, TableLayoutError, parseTable } from "../src/index";
-import { fixtureBytes } from "./fixture-http-client";
-import { absDataSheet, syntheticTable } from "./synthetic-table";
 
 const TABLE_634501 = { tableId: Schema.decodeSync(TableId)("634501") };
 

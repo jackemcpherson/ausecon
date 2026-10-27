@@ -3,7 +3,8 @@
   "compilerOptions": {
     "types": ["node"],
     "paths": {
-      "@ausecon/core": ["../core/src/index.ts"]
+      "@ausecon/core": ["../core/src/index.ts"],
+      "@ausecon/testkit": ["../testkit/index.ts"]
     },
     "resolveJsonModule": true
   },

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect } from "effect";
+import { fixtureHttpClient } from "@ausecon/testkit";
 
-import { fixtureHttpClient } from "../../../core/test/fixture-http-client";
 import { runCli } from "../run-cli";
 
 const noRequests = fixtureHttpClient(new Map());

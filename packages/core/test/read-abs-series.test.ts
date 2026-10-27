@@ -1,15 +1,17 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect } from "effect";
-
-import { AbsRequest, type Series, SeriesNotFound, readAbs } from "../src/index";
 import {
   type RecordedResponse,
   WAGE_PRICE_INDEX_RELEASE,
   directoryUrl,
   fixtureHttpClient,
   recorded,
-} from "./fixture-http-client";
-import { type SyntheticSeries, absDataSheet, syntheticTable } from "./synthetic-table";
+  type SyntheticSeries,
+  absDataSheet,
+  syntheticTable,
+} from "@ausecon/testkit";
+
+import { AbsRequest, type Series, SeriesNotFound, readAbs } from "../src/index";
 
 const MODELLERS_DATABASE_RELEASE =
   "https://www.abs.gov.au/statistics/economy/national-accounts/modellers-database/latest-release/";

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect } from "effect";
-
-import { AbsRequest, type Series, readAbs } from "../src/index";
 import {
   WAGE_PRICE_INDEX_RELEASE,
   WAGE_PRICE_INDEX_TABLE_IDS,
   fixtureHttpClient,
   wagePriceIndexResponses,
-} from "./fixture-http-client";
+} from "@ausecon/testkit";
+
+import { AbsRequest, type Series, readAbs } from "../src/index";
 
 const TABLE_1_TITLE =
   "Table 1. Total Hourly Rates of Pay Excluding Bonuses: Sector, Original, Seasonally Adjusted and Trend";

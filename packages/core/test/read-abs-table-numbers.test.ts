@@ -1,15 +1,16 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect } from "effect";
-
-import { AbsRequest, readAbs } from "../src/index";
 import {
   type RecordedResponse,
   directoryUrl,
   fixtureHttpClient,
   recorded,
   wagePriceIndexResponses,
-} from "./fixture-http-client";
-import { absDataSheet, syntheticTable } from "./synthetic-table";
+  absDataSheet,
+  syntheticTable,
+} from "@ausecon/testkit";
+
+import { AbsRequest, readAbs } from "../src/index";
 
 const LABOUR_FORCE_RELEASE =
   "https://www.abs.gov.au/statistics/labour/employment-and-unemployment/labour-force-australia/latest-release/";
