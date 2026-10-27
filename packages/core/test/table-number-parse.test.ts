@@ -38,6 +38,10 @@ describe("titleNamesTable", () => {
     expect(names("Data cube 6_Sex Employed persons", "6")).toBe(true);
   });
 
+  it("ends a number at a space", () => {
+    expect(names("Table 5 Employed persons", "5")).toBe(true);
+  });
+
   it("matches a number that ends the title", () => {
     expect(names("Table 3", "3")).toBe(true);
   });
@@ -57,6 +61,12 @@ describe("titleNamesTable", () => {
     expect(names("Tables 2a to 9a. Wage Price Index", "5a")).toBe(true);
     expect(names("Tables 2a to 9a. Wage Price Index", "5b")).toBe(false);
     expect(names("Tables 2a to 9a. Wage Price Index", "5")).toBe(false);
+  });
+
+  it("matches the letter prefix of a range, ignoring its case", () => {
+    expect(names("Table A1 to A5", "A3")).toBe(true);
+    expect(names("Table A1 to A5", "3")).toBe(false);
+    expect(names("Table a1 to a5", "A3")).toBe(true);
   });
 
   it("matches only the ends of a range whose ends carry different letters", () => {
