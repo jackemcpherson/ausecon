@@ -125,7 +125,8 @@ error channel holds one of these tagged errors:
   series index, such as an error document or malformed XML. It names the URL
   and the reason.
 - `AbsUnavailable`: a request to the ABS got no response, or a status outside
-  2xx. It names the URL, the status if the ABS answered, and the cause.
+  2xx. It names the URL, the status if the ABS answered, and the cause as
+  text in `detail`.
 
 Every error is a type the library defines. No `effect/http` error reaches
 the error channel.

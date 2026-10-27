@@ -38,22 +38,19 @@ const layoutSubject = (error: TableLayoutError): string =>
 const REPORT_IT = `Report this at ${ISSUES} with the command you ran.`;
 
 /**
- * Describe an ABS request that failed. A status means the ABS answered, so
- * the next step is to wait or report moved data. No status points at the
- * network.
+ * Describe an ABS request that failed. The library words the detail, status
+ * included, so the message only adds the URL. A status means the ABS
+ * answered, so the next step is to wait or report moved data. No status
+ * points at the network.
  */
 const describeUnavailable = (error: AbsUnavailable): Outcome =>
-  error.status === undefined
-    ? outcome(
-        EXIT_CODE.unavailable,
-        `Could not reach the ABS at ${error.url}: ${error.cause}`,
-        "Check your network connection, then try again. The ABS website may be down.",
-      )
-    : outcome(
-        EXIT_CODE.unavailable,
-        `The ABS answered ${error.url} with status ${error.status}.`,
-        `Try again later. The ABS website may be down, or the data may have moved: if the error stays, report it at ${ISSUES}.`,
-      );
+  outcome(
+    EXIT_CODE.unavailable,
+    `Could not read ${error.url}: ${error.detail}`,
+    error.status === undefined
+      ? "Check your network connection, then try again. The ABS website may be down."
+      : `Try again later. The ABS website may be down, or the data may have moved: if the error stays, report it at ${ISSUES}.`,
+  );
 
 /** Describe a command-line usage error, or a help request, for a terminal user. */
 const describeCliError = (

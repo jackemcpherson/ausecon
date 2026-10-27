@@ -378,6 +378,7 @@ describe("readAbs edge responses", () => {
         "https://www.abs.gov.au/statistics/economy/business-indicators/counts-australian-businesses-including-entries-and-exits/latest-release/8165ts13.xlsx",
       );
       expect(error).toHaveProperty("status", 404);
+      expect(error).toHaveProperty("detail", "The ABS answered with status 404.");
       expect(http.requests).toHaveLength(2);
     }),
   );
@@ -436,12 +437,12 @@ describe("readAbs edge responses", () => {
 
       expect(error._tag).toBe("AbsUnavailable");
       expect(error).toHaveProperty("url", directoryUrl({ catno: "1234.0" }));
-      expect(error).toHaveProperty("cause", "offline");
+      expect(error).toHaveProperty("detail", "offline");
       expect(error).not.toHaveProperty("status");
     }),
   );
 
-  it.effect("keeps the fetch error as the cause when a request gets no response", () =>
+  it.effect("keeps the fetch error message as the detail when a request gets no response", () =>
     Effect.gen(function* () {
       const offline = Layer.succeed(
         HttpClient.HttpClient,
@@ -463,7 +464,7 @@ describe("readAbs edge responses", () => {
       );
 
       expect(error._tag).toBe("AbsUnavailable");
-      expect(error).toHaveProperty("cause", "getaddrinfo ENOTFOUND abs.gov.au");
+      expect(error).toHaveProperty("detail", "getaddrinfo ENOTFOUND abs.gov.au");
     }),
   );
 });

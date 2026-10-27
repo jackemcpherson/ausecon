@@ -36,7 +36,8 @@ CSV output and exit codes 2 and 3 do not change.
   observations. CSV output does not change.
 - `WorkbookLayoutError` is now `TableLayoutError`, with the same fields.
 - `AbsUnavailable` replaces Effect's `HttpClientError`. It carries the URL,
-  the status if the ABS answered, and the cause as text. `ReadAbsError` holds
+  the status if the ABS answered, and the cause as text in `detail`.
+  `ReadAbsError` holds
   only errors the library defines.
 - A Time Series Directory response that is not a series index fails with
   `TimeSeriesDirectoryError`, which names the URL and the reason. An error

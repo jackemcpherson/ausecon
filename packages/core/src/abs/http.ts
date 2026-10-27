@@ -23,9 +23,12 @@ export const ABS_CONCURRENCY = 4;
 /**
  * Turn an Effect HTTP client error into the library's own failure, so that no
  * `effect/http` type leaves the library. Only a status error carries a status:
- * a body that fails to arrive is a missing response. The cause text is the
- * error description, or the message of the underlying error, such as the
- * `fetch` failure.
+ * a body that fails to arrive is a missing response.
+ *
+ * A status error's detail names the status. Effect describes every status
+ * error alike, so its description adds nothing. Any other detail is the error
+ * description, or the message of the underlying error, such as the `fetch`
+ * failure. The tool shows the detail as it is.
  */
 const unavailable = (url: string, error: HttpClientError.HttpClientError): AbsUnavailable =>
   Match.value(error.reason).pipe(
@@ -35,14 +38,14 @@ const unavailable = (url: string, error: HttpClientError.HttpClientError): AbsUn
         new AbsUnavailable({
           url,
           status: reason.response.status,
-          cause: reason.description ?? `The ABS answered with status ${reason.response.status}.`,
+          detail: `The ABS answered with status ${reason.response.status}.`,
         }),
     ),
     Match.orElse(
       (reason) =>
         new AbsUnavailable({
           url,
-          cause:
+          detail:
             reason.description ??
             (Predicate.isError(reason.cause)
               ? reason.cause.message
@@ -83,10 +86,13 @@ const fetchBody = <A>(
  * @param url - The full request URL.
  * @returns An Effect that yields the body, or fails with `AbsUnavailable`.
  */
-export const fetchText = (
+export const fetchText: (
   url: string,
-): Effect.Effect<string, AbsUnavailable, HttpClient.HttpClient> =>
-  fetchBody(url, (response) => response.text);
+) => Effect.Effect<string, AbsUnavailable, HttpClient.HttpClient> = Effect.fn("fetchText")(
+  function* (url: string) {
+    return yield* fetchBody(url, (response) => response.text);
+  },
+);
 
 /**
  * Fetch an ABS URL as bytes.
@@ -94,7 +100,12 @@ export const fetchText = (
  * @param url - The full request URL.
  * @returns An Effect that yields the body, or fails with `AbsUnavailable`.
  */
-export const fetchBytes = (
+export const fetchBytes: (
   url: string,
-): Effect.Effect<Uint8Array<ArrayBuffer>, AbsUnavailable, HttpClient.HttpClient> =>
-  fetchBody(url, (response) => Effect.map(response.arrayBuffer, (body) => new Uint8Array(body)));
+) => Effect.Effect<Uint8Array<ArrayBuffer>, AbsUnavailable, HttpClient.HttpClient> = Effect.fn(
+  "fetchBytes",
+)(function* (url: string) {
+  return yield* fetchBody(url, (response) =>
+    Effect.map(response.arrayBuffer, (body) => new Uint8Array(body)),
+  );
+});

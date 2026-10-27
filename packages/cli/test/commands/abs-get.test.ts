@@ -350,18 +350,22 @@ describe("ausecon abs get read failures", () => {
     },
     {
       name: "AbsUnavailable with a status",
-      error: new AbsUnavailable({ url: TABLE_URL, status: 404, cause: "Not Found" }),
+      error: new AbsUnavailable({
+        url: TABLE_URL,
+        status: 404,
+        detail: "The ABS answered with status 404.",
+      }),
       exitCode: 4,
       stderr:
-        `ausecon: The ABS answered ${TABLE_URL} with status 404.\n` +
+        `ausecon: Could not read ${TABLE_URL}: The ABS answered with status 404.\n` +
         `Try again later. The ABS website may be down, or the data may have moved: if the error stays, report it at ${ISSUES}.`,
     },
     {
       name: "AbsUnavailable without a status",
-      error: new AbsUnavailable({ url: DIRECTORY_URL, cause: "offline" }),
+      error: new AbsUnavailable({ url: DIRECTORY_URL, detail: "offline" }),
       exitCode: 4,
       stderr:
-        `ausecon: Could not reach the ABS at ${DIRECTORY_URL}: offline\n` +
+        `ausecon: Could not read ${DIRECTORY_URL}: offline\n` +
         "Check your network connection, then try again. The ABS website may be down.",
     },
     {

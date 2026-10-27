@@ -179,12 +179,13 @@ export class SeriesNotFound extends Schema.TaggedError<SeriesNotFound>()("Series
 /**
  * A request to the ABS got no response, or a status outside 2xx.
  *
- * `status` is present when the ABS answered. `cause` describes the failure.
+ * `status` is present when the ABS answered. `detail` describes the failure
+ * as text, such as the status or the network error.
  */
 export class AbsUnavailable extends Schema.TaggedError<AbsUnavailable>()("AbsUnavailable", {
   url: Schema.String,
   status: Schema.optionalKey(Schema.Number),
-  cause: Schema.String,
+  detail: Schema.String,
 }) {}
 
 /**
