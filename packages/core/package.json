@@ -1,6 +1,6 @@
 {
   "name": "@ausecon/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Read Australian economic data from the ABS and RBA.",
   "license": "MIT",
   "repository": {

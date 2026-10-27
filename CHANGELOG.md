@@ -5,9 +5,10 @@ packages share one version number.
 
 ---
 
-## Unreleased
+## 0.2.0 - 2026-10-27
 
-This release returns series from `readAbs`.
+This release returns series from `readAbs` and breaks the 0.1.0 interface.
+CSV output and exit codes 2 and 3 do not change.
 
 ### Added
 
@@ -19,9 +20,10 @@ This release returns series from `readAbs`.
 ### Changed
 
 - `readAbs` returns a read-only array of `Series`, one per series ID and
-  sheet. Each `Series` carries its metadata once, its `Table` (`tableId` and
-  an optional `tableTitle`), its sheet, and its observations as `date` and
-  `value` pairs. A series request returns only the requested series.
+  sheet, in place of one observation per series and period. Each `Series`
+  carries its metadata once, its `Table` (`tableId` and an optional
+  `tableTitle`), its sheet, and its observations as `date` and `value` pairs.
+  A series request returns only the requested series.
 - `Series.seriesId` is the branded `SeriesId`, the same type as
   `SeriesNotFound.seriesIds`. A table whose row 10 holds text that is not a
   series ID fails with `TableLayoutError`.
