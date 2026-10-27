@@ -6,8 +6,8 @@ const TITLE_PREFIX = /^(?:Tables|Table|TABLE|Data cube)[ _]/;
 
 const NUMBER = String.raw`[A-Za-z]?\d+[A-Za-z]?(?:_[A-Za-z0-9]+)?`;
 
-// `4, 5 and 6` or `7 and 9`, ending where a single number would end.
-const NUMBER_LIST = new RegExp(String.raw`^${NUMBER}(?:, ${NUMBER})*,? and ${NUMBER}(?=[.: ]|$)`);
+// `4, 5 and 6`, `4, 5, 6`, or `7 and 9`, ending where a single number would end.
+const NUMBER_LIST = new RegExp(String.raw`^${NUMBER}(?:(?:,? and |, )${NUMBER})+(?=[.: ]|$)`);
 
 const LIST_SEPARATOR = /,? and |, /;
 

@@ -110,6 +110,13 @@ const BUSINESS_COUNTS_RELEASE =
 // recorded fixture covers.
 const SYNTHETIC_RELEASE = "https://www.abs.gov.au/synthetic/latest-release/";
 
+const SYNTHETIC_TABLES = ["567801", "567802", "567803", "567804", "567805", "567806"].map(
+  (tableId) => `${SYNTHETIC_RELEASE}${tableId}.xlsx`,
+);
+
+const readSynthetic = (tableNumbers: ReadonlyArray<string>) =>
+  readTableNumbers("5678.0", "synthetic-directory-5678.0.xml", SYNTHETIC_TABLES, tableNumbers);
+
 describe("readAbs with table numbers", () => {
   it.effect("finds Table 001 for table number 1", () =>
     Effect.gen(function* () {
@@ -217,6 +224,15 @@ describe("readAbs with table numbers", () => {
 
       // Table_21_Online_...; Table 14A_Sep97.; Table 7_A Monthly ...
       expect(tableIds).toEqual(["567801", "567802", "567803"]);
+    }),
+  );
+
+  it.effect("matches each number of a list without and", () =>
+    Effect.gen(function* () {
+      const { tableIds } = yield* readSynthetic(["4", "5", "6"]);
+
+      // Tables 4, 5, 6.
+      expect(tableIds).toEqual(["567804"]);
     }),
   );
 
