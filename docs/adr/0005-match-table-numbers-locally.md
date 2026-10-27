@@ -21,3 +21,14 @@ does for series IDs, so `x28` finds `Table X28`. The `TableNumber` schema
 keeps its upper-case letter prefix. The match reads no table number from an
 `APPENDIX` title, because a table number cannot name an appendix. So
 `APPENDIX 2` never matches table `2`.
+
+## Lists and Ranges
+
+A title can name several table numbers. A list, such as `Tables 4, 5 and 6.`
+or `Tables 4, 5, 6.`, names each number in it. A range, such as
+`Tables 01 to 17`, names each number from one end to the other.
+
+A range whose ends carry the same letters, such as `Tables 2a to 9a`, names
+each number with those letters: `2a`, `3a`, and so on to `9a`. A range whose
+ends carry different letters, such as `Tables 2a to 4b`, has no clear middle,
+so it names only its two ends.

@@ -11,10 +11,8 @@ const NUMBER_LIST = new RegExp(String.raw`^${NUMBER}(?:(?:,? and |, )${NUMBER})+
 
 const LIST_SEPARATOR = /,? and |, /;
 
-// `01 to 17`, ending where a single number would end.
-const NUMBER_RANGE = /^(\d+) to (\d+)(?=[.: ]|$)/;
-
-const DIGITS = /^\d+$/;
+// `01 to 17` or `2a to 9a`, ending where a single number would end.
+const NUMBER_RANGE = /^([A-Za-z]?)(\d+)([A-Za-z]?) to ([A-Za-z]?)(\d+)([A-Za-z]?)(?=[.: ]|$)/;
 
 // A number runs to `.`, `:`, a space, or the end of the title.
 const NUMBER_END = /[.: ]|$/;
@@ -33,6 +31,41 @@ const oneOf =
   (tableNumber) =>
     numbers.map(comparable).includes(tableNumber);
 
+/**
+ * The table numbers a range names. A range whose ends carry the same letters,
+ * such as `01 to 17` or `2a to 9a`, names each number from one end to the
+ * other. A range whose letters differ, such as `2a to 4b`, names only its two
+ * ends, as ADR 0005 records.
+ */
+const rangeNumbers = (range: RegExpExecArray): ReadonlyArray<string> => {
+  const [
+    ,
+    firstPrefix = "",
+    firstDigits = "",
+    firstSuffix = "",
+    lastPrefix = "",
+    lastDigits = "",
+    lastSuffix = "",
+  ] = range;
+
+  const prefix = firstPrefix.toUpperCase();
+  const suffix = firstSuffix.toUpperCase();
+
+  if (prefix !== lastPrefix.toUpperCase() || suffix !== lastSuffix.toUpperCase()) {
+    return [
+      `${firstPrefix}${firstDigits}${firstSuffix}`,
+      `${lastPrefix}${lastDigits}${lastSuffix}`,
+    ];
+  }
+
+  const first = Number(firstDigits);
+
+  return Array.from(
+    { length: Math.max(Number(lastDigits) - first + 1, 0) },
+    (_, index) => `${prefix}${first + index}${suffix}`,
+  );
+};
+
 /** Parse the table numbers a title names into a test. */
 const titleMatch = (title: string): TitleMatch => {
   const prefix = TITLE_PREFIX.exec(title);
@@ -45,11 +78,7 @@ const titleMatch = (title: string): TitleMatch => {
   const range = NUMBER_RANGE.exec(rest);
 
   if (range !== null) {
-    const first = Number(range[1]);
-    const last = Number(range[2]);
-
-    return (tableNumber) =>
-      DIGITS.test(tableNumber) && Number(tableNumber) >= first && Number(tableNumber) <= last;
+    return oneOf(rangeNumbers(range));
   }
 
   const list = NUMBER_LIST.exec(rest);

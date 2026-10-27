@@ -236,6 +236,27 @@ describe("readAbs with table numbers", () => {
     }),
   );
 
+  it.effect("matches each number in a range of lettered tables with the same letter", () =>
+    Effect.gen(function* () {
+      const { tableIds } = yield* readSynthetic(["3a", "9A"]);
+
+      // Tables 2a to 9a.
+      expect(tableIds).toEqual(["567805"]);
+    }),
+  );
+
+  it.effect("matches only the ends of a range whose letters differ", () =>
+    Effect.gen(function* () {
+      const ends = yield* readSynthetic(["2a", "4b"]);
+      const error = yield* readSynthetic(["3a", "3b", "5a"]).pipe(Effect.flip);
+
+      // Tables 2a to 9a; Tables 2a to 4b.
+      expect(ends.tableIds).toEqual(["567805", "567806"]);
+      expect(error._tag).toBe("TableNotFound");
+      expect(error).toMatchObject({ tableNumbers: ["3B"] });
+    }),
+  );
+
   it.effect("fails once with TableNotFound listing every unmatched table number", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(
