@@ -85,6 +85,72 @@ describe("readAbs for series IDs", () => {
     }),
   );
 
+  it.effect("reads a series from its lowest table order when the Directory lists it later", () =>
+    Effect.gen(function* () {
+      const firstUrl = "https://www.abs.gov.au/synthetic/latest-release/123401.xlsx";
+      const thirdUrl = "https://www.abs.gov.au/synthetic/latest-release/123403.xlsx";
+
+      const row = (tableUrl: string, tableOrder: number) =>
+        `<Series><ProductReleaseDate>15/04/2026</ProductReleaseDate><TableURL>${tableUrl}</TableURL><TableTitle>Table ${tableOrder}. Synthetic</TableTitle><TableOrder>${tableOrder}</TableOrder><SeriesID>A1000001A</SeriesID></Series>`;
+
+      const table = (value: number): RecordedResponse => ({
+        status: 200,
+        body: syntheticTable([
+          ["Data1", absDataSheet([syntheticSeries("A1000001A")], [[46023, value]])],
+        ]),
+      });
+
+      const http = fixtureHttpClient(
+        new Map<string, RecordedResponse>([
+          [
+            directoryUrl({ sid: "A1000001A" }),
+            {
+              status: 200,
+              body: `<?xml version="1.0" encoding="utf-8" ?><TimeSeriesIndex>${row(thirdUrl, 3)}${row(firstUrl, 1)}</TimeSeriesIndex>`,
+            },
+          ],
+          [firstUrl, table(1)],
+          [thirdUrl, table(3)],
+        ]),
+      );
+
+      const series = yield* readAbs(AbsRequest.Series({ seriesIds: ["A1000001A"] })).pipe(
+        Effect.provide(http.layer),
+      );
+
+      expect(
+        series.map(({ table, observations }) => [table.tableId, observations[0]?.value]),
+      ).toEqual([["123401", 1]]);
+    }),
+  );
+
+  it.effect("names a table by its file name without a query", () =>
+    Effect.gen(function* () {
+      const tableUrl = "https://www.abs.gov.au/synthetic/latest-release/6345001.xlsx?v=2.1";
+
+      const http = fixtureHttpClient(
+        new Map<string, RecordedResponse>([
+          [directoryUrl({ sid: "A1000001A" }), sidResponse("A1000001A", tableUrl)],
+          [
+            tableUrl,
+            {
+              status: 200,
+              body: syntheticTable([
+                ["Data1", absDataSheet([syntheticSeries("A1000001A")], [[46023, 1]])],
+              ]),
+            },
+          ],
+        ]),
+      );
+
+      const series = yield* readAbs(AbsRequest.Series({ seriesIds: ["A1000001A"] })).pipe(
+        Effect.provide(http.layer),
+      );
+
+      expect(series.map(({ table }) => table.tableId)).toEqual(["6345001"]);
+    }),
+  );
+
   it.effect("downloads a table once for two series from one table", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(seriesResponses());
@@ -206,6 +272,36 @@ describe("readAbs for series IDs", () => {
       expect(error).toBeInstanceOf(SeriesNotFound);
       expect(error).toHaveProperty("seriesIds", ["A2325807L", "Z9999999Z"]);
       expect(http.requests.some((request) => request.url.endsWith(".xlsx"))).toBe(false);
+    }),
+  );
+
+  it.effect("downloads no table when one series ID is unknown", () =>
+    Effect.gen(function* () {
+      const http = fixtureHttpClient(seriesResponses());
+
+      const error = yield* readAbs(
+        AbsRequest.Series({ seriesIds: ["A2603039T", "Z9999999Z"] }),
+      ).pipe(Effect.flip, Effect.provide(http.layer));
+
+      expect(error).toBeInstanceOf(SeriesNotFound);
+      expect(error).toHaveProperty("seriesIds", ["Z9999999Z"]);
+      expect(http.requests.some((request) => request.url.endsWith(".xlsx"))).toBe(false);
+    }),
+  );
+
+  it.effect("looks up a repeated unknown series ID once and names it once", () =>
+    Effect.gen(function* () {
+      const http = fixtureHttpClient(seriesResponses());
+
+      const error = yield* readAbs(
+        AbsRequest.Series({ seriesIds: ["Z9999999Z", "Z9999999Z"] }),
+      ).pipe(Effect.flip, Effect.provide(http.layer));
+
+      expect(error).toBeInstanceOf(SeriesNotFound);
+      expect(error).toHaveProperty("seriesIds", ["Z9999999Z"]);
+      expect(http.requests.map((request) => request.url)).toEqual([
+        directoryUrl({ sid: "Z9999999Z" }),
+      ]);
     }),
   );
 });
