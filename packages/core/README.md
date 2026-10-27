@@ -60,6 +60,10 @@ const series = await Effect.runPromise(
 Pass `{ hasMetadata: false }` as the second argument to get only the series ID,
 date, and value of each observation.
 
+The read trims spaces from each catalogue number, table number, and series
+ID, and upper-cases table numbers and series IDs. A four-digit catalogue
+number such as `6345` gains `.0`.
+
 ## Errors
 
 `Effect.runPromise` rejects when the read fails. Inside Effect code, the
@@ -76,6 +80,13 @@ error channel holds one of these tagged errors:
   layout.
 - `HttpClientError`: a request failed or the ABS answered with a status
   outside 2xx.
+
+`WorkbookLayoutError` names the table ID and, when a sheet fails the check,
+the sheet. A file that does not open as `.xlsx` gives the error without a
+sheet. Each data sheet must hold `Series ID` in column A of row 10, and the
+five metadata labels `Unit`, `Series Type`, `Data Type`, `Frequency`, and
+`Collection Month` in column A of rows 2 to 9. Below row 10, column A must
+hold a date, a blank, or a note that contains `Trend Break` or `see`.
 
 ## Your Own `HttpClient`
 
