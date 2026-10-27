@@ -120,7 +120,7 @@ export const parseDirectoryPage = (
   );
 
 /**
- * Keep only rows that link to a spreadsheet.
+ * Keep only rows that link to a table.
  *
  * @param rows - Directory rows.
  * @returns The rows with a non-empty `TableURL`.

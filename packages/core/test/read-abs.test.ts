@@ -44,7 +44,7 @@ describe("readAbs Time Series Directory lookup", () => {
   it.effect("appends .0 to a four-digit catalogue number", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(
-        new Map([[directoryUrl({ catno: "9999.0" }), recorded("tsd-catno-9999.0.xml")]]),
+        new Map([[directoryUrl({ catno: "9999.0" }), recorded("directory-catno-9999.0.xml")]]),
       );
 
       const error = yield* readAbs(AbsRequest.Catalogue({ catalogueNumber: "9999" })).pipe(
@@ -64,7 +64,7 @@ describe("readAbs Time Series Directory lookup", () => {
   it.effect("sends the project User-Agent to the Time Series Directory", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(
-        new Map([[directoryUrl({ catno: "9999.0" }), recorded("tsd-catno-9999.0.xml")]]),
+        new Map([[directoryUrl({ catno: "9999.0" }), recorded("directory-catno-9999.0.xml")]]),
       );
 
       yield* readAbs(AbsRequest.Catalogue({ catalogueNumber: "9999.0" })).pipe(
@@ -91,7 +91,7 @@ describe("readAbs Time Series Directory lookup", () => {
   const undecodableBodies: ReadonlyArray<readonly [string, string, string]> = [
     [
       "an error document",
-      new TextDecoder().decode(fixtureBytes("tsd-error-invalid-query.xml")),
+      new TextDecoder().decode(fixtureBytes("directory-error-invalid-query.xml")),
       "Invalid query.",
     ],
     ["malformed XML", "<TimeSeriesIndex><Series>", "malformed"],

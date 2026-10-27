@@ -44,12 +44,12 @@ export const absDataSheet = (
 ];
 
 /**
- * Write a synthetic `.xlsx` workbook.
+ * Write a synthetic table as an `.xlsx` file.
  *
- * @param sheets - Sheet names and rows, in workbook order.
- * @returns The workbook file contents.
+ * @param sheets - Sheet names and rows, in file order.
+ * @returns The `.xlsx` file contents.
  */
-export const syntheticWorkbook = (
+export const syntheticTable = (
   sheets: ReadonlyArray<readonly [string, SyntheticRows]>,
 ): Uint8Array<ArrayBuffer> => {
   const workbook = utils.book_new();

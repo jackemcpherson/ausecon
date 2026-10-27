@@ -12,7 +12,7 @@ import {
 const MODELLERS_DATABASE_RELEASE =
   "https://www.abs.gov.au/statistics/economy/national-accounts/modellers-database/latest-release/";
 
-/** Recorded `sid` responses and the spreadsheets they point to. */
+/** Recorded `sid` responses and the tables they point to. */
 const seriesResponses = () =>
   new Map([
     [directoryUrl({ sid: "A2603039T" }), recorded("sid-A2603039T.xml")],
@@ -65,7 +65,7 @@ describe("readAbs for series IDs", () => {
     }),
   );
 
-  it.effect("downloads a spreadsheet once for two series from one table", () =>
+  it.effect("downloads a table once for two series from one table", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(seriesResponses());
 

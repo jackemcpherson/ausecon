@@ -3,8 +3,8 @@ import { type CellObject, type WorkSheet, read, utils } from "xlsx";
 
 import { type Observation, WorkbookLayoutError } from "../types";
 
-/** The table that a spreadsheet holds. */
-export interface WorkbookTable {
+/** The table ID and title that each observation of a table carries. */
+export interface TableLabels {
   readonly tableId: string;
   readonly tableTitle: string;
 }
@@ -86,7 +86,7 @@ const isDataSheet = (sheetName: string): boolean =>
 const checkLayout = (
   sheet: WorkSheet,
   name: string,
-  table: WorkbookTable,
+  table: TableLabels,
 ): Effect.Effect<DataSheet, WorkbookLayoutError> => {
   const layoutError = (reason: string): WorkbookLayoutError =>
     new WorkbookLayoutError({ tableId: table.tableId, sheet: name, reason });
@@ -131,7 +131,7 @@ const checkLayout = (
 };
 
 /** Read the observations of one checked data sheet. */
-const sheetObservations = (data: DataSheet, table: WorkbookTable): ReadonlyArray<Observation> => {
+const sheetObservations = (data: DataSheet, table: TableLabels): ReadonlyArray<Observation> => {
   const { sheet, metadataRows } = data;
   const dates = new Map<number, string>();
 
@@ -190,7 +190,7 @@ const sheetObservations = (data: DataSheet, table: WorkbookTable): ReadonlyArray
 };
 
 /**
- * Read the observations of an ABS time series spreadsheet.
+ * Read the observations of an ABS time series table.
  *
  * Skips the sheets `readabs` skips. Each data sheet must have `Series ID` in
  * column A of row 10. Rows without a date in column A, such as `Trend Break`
@@ -202,19 +202,19 @@ const sheetObservations = (data: DataSheet, table: WorkbookTable): ReadonlyArray
  * @returns An Effect that yields the observations, or fails with
  * `WorkbookLayoutError`.
  */
-export const parseWorkbook = (
+export const parseTable = (
   bytes: Uint8Array,
-  table: WorkbookTable,
+  table: TableLabels,
 ): Effect.Effect<ReadonlyArray<Observation>, WorkbookLayoutError> =>
   Effect.try({
     try: () => read(bytes, { type: "array", cellDates: false, cellHTML: false }),
     catch: (cause) =>
       new WorkbookLayoutError({
         tableId: table.tableId,
-        reason: `The spreadsheet cannot be opened: ${String(cause)}`,
+        reason: `The table cannot be opened as .xlsx: ${String(cause)}`,
       }),
   }).pipe(
-    // SheetJS adds sheets in workbook order, so entry order is sheet order.
+    // SheetJS adds sheets in file order, so entry order is sheet order.
     Effect.flatMap((workbook) =>
       Effect.forEach(
         Object.entries(workbook.Sheets).filter(([name]) => isDataSheet(name)),

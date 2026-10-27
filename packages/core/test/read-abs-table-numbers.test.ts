@@ -9,15 +9,15 @@ import {
   recorded,
   wagePriceIndexResponses,
 } from "./fixture-http-client";
-import { absDataSheet, syntheticWorkbook } from "./synthetic-workbook";
+import { absDataSheet, syntheticTable } from "./synthetic-table";
 
 const LABOUR_FORCE_RELEASE =
   "https://www.abs.gov.au/statistics/labour/employment-and-unemployment/labour-force-australia/latest-release/";
 
-// Each spreadsheet holds one series, so a test can tell which tables were read.
+// Each table holds one series, so a test can tell which tables were read.
 const oneSeriesTable = (): RecordedResponse => ({
   status: 200,
-  body: syntheticWorkbook([
+  body: syntheticTable([
     [
       "Data1",
       absDataSheet(
@@ -40,7 +40,7 @@ const oneSeriesTable = (): RecordedResponse => ({
 
 /**
  * Read table numbers of a catalogue number whose directory is one recorded
- * page, serving a one-series spreadsheet at every table URL.
+ * page, serving a one-series table at every table URL.
  */
 const readTableNumbers = (
   catalogueNumber: string,
@@ -69,7 +69,7 @@ const LABOUR_FORCE_TABLES = ["62020001", "62020x28", "62020021_mth"].map(
 );
 
 const readLabourForce = (tableNumbers: ReadonlyArray<string>) =>
-  readTableNumbers("6202.0", "tsd-6202.0.trimmed.xml", LABOUR_FORCE_TABLES, tableNumbers);
+  readTableNumbers("6202.0", "directory-6202.0.trimmed.xml", LABOUR_FORCE_TABLES, tableNumbers);
 
 const TRADE_PRICES_RELEASE =
   "https://www.abs.gov.au/statistics/economy/price-indexes-and-inflation/international-trade-price-indexes-australia/latest-release/";
@@ -87,7 +87,7 @@ const TRADE_PRICES_TABLES = [
 ].map((tableId) => `${TRADE_PRICES_RELEASE}${tableId}.xlsx`);
 
 const readTradePrices = (tableNumbers: ReadonlyArray<string>) =>
-  readTableNumbers("6457.0", "tsd-6457.0.trimmed.xml", TRADE_PRICES_TABLES, tableNumbers);
+  readTableNumbers("6457.0", "directory-6457.0.trimmed.xml", TRADE_PRICES_TABLES, tableNumbers);
 
 const MODELLERS_DATABASE_TABLE =
   "https://www.abs.gov.au/statistics/economy/national-accounts/modellers-database/latest-release/1364015003.xlsx";
@@ -95,7 +95,7 @@ const MODELLERS_DATABASE_TABLE =
 const readModellersDatabase = (tableNumbers: ReadonlyArray<string>) =>
   readTableNumbers(
     "1364.0.15.003",
-    "tsd-1364.0.15.003.trimmed.xml",
+    "directory-1364.0.15.003.trimmed.xml",
     [MODELLERS_DATABASE_TABLE],
     tableNumbers,
   );
@@ -184,7 +184,7 @@ describe("readAbs with table numbers", () => {
     Effect.gen(function* () {
       const { tableIds } = yield* readTableNumbers(
         "6401.0",
-        "tsd-6401.0.trimmed.xml",
+        "directory-6401.0.trimmed.xml",
         [`${CPI_RELEASE}640102.xlsx`],
         ["2"],
       );
@@ -197,7 +197,7 @@ describe("readAbs with table numbers", () => {
     Effect.gen(function* () {
       const { tableIds } = yield* readTableNumbers(
         "8165.0",
-        "tsd-8165.0-p1.xml",
+        "directory-8165.0-p1.xml",
         [`${BUSINESS_COUNTS_RELEASE}8165ts13.xlsx`],
         ["13"],
       );
@@ -210,7 +210,7 @@ describe("readAbs with table numbers", () => {
     Effect.gen(function* () {
       const { tableIds } = yield* readTableNumbers(
         "5678.0",
-        "synthetic-tsd-5678.0.xml",
+        "synthetic-directory-5678.0.xml",
         ["567801", "567802", "567803"].map((tableId) => `${SYNTHETIC_RELEASE}${tableId}.xlsx`),
         ["21", "14a_sep97", "7"],
       );
@@ -223,7 +223,7 @@ describe("readAbs with table numbers", () => {
   it.effect("fails once with TableNotFound listing every unmatched table number", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(
-        new Map([[directoryUrl({ catno: "6202.0" }), recorded("tsd-6202.0.trimmed.xml")]]),
+        new Map([[directoryUrl({ catno: "6202.0" }), recorded("directory-6202.0.trimmed.xml")]]),
       );
 
       const error = yield* readAbs(

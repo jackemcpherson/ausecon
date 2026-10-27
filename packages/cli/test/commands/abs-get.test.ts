@@ -264,7 +264,7 @@ describe("ausecon abs get failures", () => {
   it.effect("exits 3 with a next step when the catalogue number has no series", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(
-        new Map([[directoryUrl({ catno: "9999.0" }), recorded("tsd-catno-9999.0.xml")]]),
+        new Map([[directoryUrl({ catno: "9999.0" }), recorded("directory-catno-9999.0.xml")]]),
       );
 
       const result = yield* runCli(["abs", "get", "--catalogue", "9999.0"], http.layer);

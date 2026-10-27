@@ -87,10 +87,10 @@ export const directoryUrl = (query: Readonly<Record<string, string>>): string =>
  */
 export const wagePriceIndexResponses = (): ReadonlyMap<string, RecordedResponse> =>
   new Map([
-    [directoryUrl({ catno: "6345.0" }), recorded("tsd-6345.0-p1.xml")],
+    [directoryUrl({ catno: "6345.0" }), recorded("directory-6345.0-p1.xml")],
     ...Array.from({ length: 9 }, (_, index): [string, RecordedResponse] => [
       directoryUrl({ catno: "6345.0", pg: `${index + 2}` }),
-      recorded(`tsd-6345.0-p${index + 2}.xml`),
+      recorded(`directory-6345.0-p${index + 2}.xml`),
     ]),
     ...WAGE_PRICE_INDEX_TABLE_IDS.map((tableId): [string, RecordedResponse] => [
       `${WAGE_PRICE_INDEX_RELEASE}${tableId}.xlsx`,

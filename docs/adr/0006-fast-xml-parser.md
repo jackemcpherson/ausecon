@@ -15,7 +15,7 @@ Time Series Directory returns with HTTP 200, fails the read with an
 
 The read keeps only rows from the latest `ProductReleaseDate` of each table.
 A table is one `TableURL`, as `readabs` groups rows in `read_abs`. Rows with an
-empty `TableURL` link to no spreadsheet, so the read skips them.
+empty `TableURL` link to no table, so the read skips them.
 
 ## Considered Options
 

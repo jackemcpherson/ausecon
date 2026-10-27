@@ -161,9 +161,9 @@ export class SeriesNotFound extends Schema.TaggedError<SeriesNotFound>()("Series
 }) {}
 
 /**
- * A spreadsheet does not have the ABS time series layout.
+ * A table does not have the ABS time series layout.
  *
- * `sheet` is absent when the spreadsheet cannot be opened at all.
+ * `sheet` is absent when the table cannot be opened as `.xlsx` at all.
  */
 export class WorkbookLayoutError extends Schema.TaggedError<WorkbookLayoutError>()(
   "WorkbookLayoutError",

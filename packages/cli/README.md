@@ -55,7 +55,7 @@ Pass exactly one of `--catalogue` or `--series`. `--table` needs
 | Code | Meaning                                                      |
 | ---- | ------------------------------------------------------------ |
 | 0    | The read succeeded.                                          |
-| 1    | An unexpected failure, such as a spreadsheet layout change.  |
+| 1    | An unexpected failure, such as a table layout change.        |
 | 2    | A usage error, such as a missing flag or an invalid value.   |
 | 3    | No such catalogue number, table number, or series ID.        |
 | 4    | A network failure, or the ABS answered with an HTTP error.   |

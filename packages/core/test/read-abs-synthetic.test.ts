@@ -8,7 +8,7 @@ import {
   fixtureHttpClient,
   recorded,
 } from "./fixture-http-client";
-import { type SyntheticSeries, absDataSheet, syntheticWorkbook } from "./synthetic-workbook";
+import { type SyntheticSeries, absDataSheet, syntheticTable } from "./synthetic-table";
 
 // The synthetic catalogue `1234.0` has one table with a superseded and a
 // current release, one table whose URL has a space, and one row with no URL.
@@ -36,13 +36,13 @@ const COUNT_SERIES: SyntheticSeries = {
   seriesId: "A1000002B",
 };
 
-const table2 = syntheticWorkbook([["Data1", absDataSheet([COUNT_SERIES], [[46023, 7]])]]);
+const table2 = syntheticTable([["Data1", absDataSheet([COUNT_SERIES], [[46023, 7]])]]);
 
 const syntheticResponses = (
   table1: Uint8Array<ArrayBuffer>,
 ): ReadonlyMap<string, RecordedResponse> =>
   new Map([
-    [directoryUrl({ catno: "1234.0" }), recorded("synthetic-tsd-1234.0.xml")],
+    [directoryUrl({ catno: "1234.0" }), recorded("synthetic-directory-1234.0.xml")],
     [TABLE_1_URL, { status: 200, body: table1 }],
     [TABLE_2_URL, { status: 200, body: table2 }],
   ]);
@@ -56,7 +56,7 @@ const readSynthetic = (table1: Uint8Array<ArrayBuffer>) => {
   );
 };
 
-const validTable1 = syntheticWorkbook([
+const validTable1 = syntheticTable([
   ["Index", [["Time Series Workbook"], ["Contents"]]],
   [
     "Data1",
@@ -114,7 +114,7 @@ describe("readAbs on a synthetic release", () => {
 
   it.effect("drops notes, blank cells, and text cells, and skips non-data sheets", () =>
     Effect.gen(function* () {
-      const table1 = syntheticWorkbook([
+      const table1 = syntheticTable([
         ["Index", [["Series ID"]]],
         [
           "Data1",
@@ -164,7 +164,7 @@ describe("readAbs on a synthetic release", () => {
 
   it.effect("fails with WorkbookLayoutError when row 10 does not hold Series ID", () =>
     Effect.gen(function* () {
-      const table1 = syntheticWorkbook([
+      const table1 = syntheticTable([
         ["Data1", absDataSheet([INDEX_SERIES], [[46023, 100]]).slice(1)],
       ]);
 
@@ -185,7 +185,7 @@ describe("readAbs on a synthetic release", () => {
       );
 
       const error = yield* readSynthetic(
-        syntheticWorkbook([
+        syntheticTable([
           ["Data1", absDataSheet([INDEX_SERIES], [[46023, 100]])],
           ["Data2", rows],
         ]),
@@ -197,7 +197,7 @@ describe("readAbs on a synthetic release", () => {
     }),
   );
 
-  it.effect("fails with WorkbookLayoutError when the spreadsheet cannot be opened", () =>
+  it.effect("fails with WorkbookLayoutError when the table cannot be opened", () =>
     Effect.gen(function* () {
       const error = yield* readSynthetic(
         new TextEncoder().encode("<html><body>Not found</body></html>"),
@@ -211,11 +211,14 @@ describe("readAbs on a synthetic release", () => {
 });
 
 describe("readAbs edge responses", () => {
-  it.effect("fails with CatalogueNotFound when no row links to a spreadsheet", () =>
+  it.effect("fails with CatalogueNotFound when no row links to a table", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(
         new Map([
-          [directoryUrl({ catno: "6204.0.55.001" }), recorded("tsd-6204.0.55.001-p1.trimmed.xml")],
+          [
+            directoryUrl({ catno: "6204.0.55.001" }),
+            recorded("directory-6204.0.55.001-p1.trimmed.xml"),
+          ],
         ]),
       );
 
@@ -233,7 +236,7 @@ describe("readAbs edge responses", () => {
     Effect.gen(function* () {
       const http = fixtureHttpClient(
         new Map([
-          [directoryUrl({ catno: "8165.0" }), recorded("tsd-8165.0-p1.xml")],
+          [directoryUrl({ catno: "8165.0" }), recorded("directory-8165.0-p1.xml")],
           [
             "https://www.abs.gov.au/statistics/economy/business-indicators/counts-australian-businesses-including-entries-and-exits/latest-release/8165ts13.xlsx",
             { status: 404, body: "<html><body>Page not found</body></html>" },
@@ -268,7 +271,7 @@ describe("readAbs edge responses", () => {
           ],
           [
             "https://www.abs.gov.au/servlet/TSSearchServlet?catno=9999.0",
-            recorded("tsd-catno-9999.0.xml"),
+            recorded("directory-catno-9999.0.xml"),
           ],
         ]),
       );

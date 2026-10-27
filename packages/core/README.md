@@ -72,7 +72,7 @@ error channel holds one of these tagged errors:
 - `TableNotFound`: the catalogue number has no table with a requested table
   number.
 - `SeriesNotFound`: the Time Series Directory has no record of a series ID.
-- `WorkbookLayoutError`: a spreadsheet does not have the ABS time series
+- `WorkbookLayoutError`: a table does not have the ABS time series
   layout.
 - `HttpClientError`: a request failed or the ABS answered with a status
   outside 2xx.

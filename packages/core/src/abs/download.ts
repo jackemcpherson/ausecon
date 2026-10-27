@@ -4,9 +4,9 @@ import type { HttpClient, HttpClientError } from "effect/http";
 import type { Observation, WorkbookLayoutError } from "../types";
 import { absHttpClient } from "./http";
 import type { DirectoryTable } from "./time-series-directory-parse";
-import { parseWorkbook } from "./workbook-parse";
+import { parseTable } from "./table-parse";
 
-/** The most spreadsheets downloaded at once. */
+/** The most tables downloaded at once. */
 const DOWNLOAD_CONCURRENCY = 4;
 
 /**
@@ -30,15 +30,15 @@ export const readTables = (
     const client = yield* absHttpClient;
     const distinct = [...new Map(tables.map((table) => [table.tableUrl, table])).values()];
 
-    const workbooks = yield* Effect.forEach(
+    const tableObservations = yield* Effect.forEach(
       distinct,
       (table) =>
         client.get(table.tableUrl.replaceAll(" ", "+")).pipe(
           Effect.flatMap((response) => response.arrayBuffer),
-          Effect.flatMap((body) => parseWorkbook(new Uint8Array(body), table)),
+          Effect.flatMap((body) => parseTable(new Uint8Array(body), table)),
         ),
       { concurrency: DOWNLOAD_CONCURRENCY },
     );
 
-    return workbooks.flat();
+    return tableObservations.flat();
   });

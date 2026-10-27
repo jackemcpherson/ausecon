@@ -16,7 +16,7 @@ const PRIVATE_SECTOR_DESCRIPTION =
   "Quarterly Index ;  Total hourly rates of pay excluding bonuses ;  Australia ;  Private ;  All industries ;";
 
 describe("readAbs for every table of a catalogue number", () => {
-  it.effect("returns each observation with the metadata of its spreadsheet", () =>
+  it.effect("returns each observation with the metadata of its table", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(wagePriceIndexResponses());
 
@@ -81,7 +81,7 @@ describe("readAbs for every table of a catalogue number", () => {
     }),
   );
 
-  it.effect("requests every spreadsheet and directory page once, with the User-Agent", () =>
+  it.effect("requests every table and directory page once, with the User-Agent", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(wagePriceIndexResponses());
 
