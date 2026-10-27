@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Predicate } from "effect";
 import type { HttpClient } from "effect/http";
 
 import {
@@ -6,6 +6,7 @@ import {
   CatalogueNotFound,
   type CatalogueNumber,
   type SeriesId,
+  SeriesNotFound,
   type Table,
   TableId,
   TableNotFound,
@@ -30,10 +31,17 @@ const DIRECTORY_URL = "https://abs.gov.au/servlet/TSSearchServlet";
  */
 export type Tables = ReadonlyMap<string, Table>;
 
-/** The table that holds a series, and the Directory row it is read from. */
-export interface SeriesTable {
-  readonly table: Table;
-  readonly row: DirectoryRow;
+/**
+ * The tables that hold requested series, and the series IDs to keep from
+ * each.
+ *
+ * A table can hold more series than were requested, so the read keeps only
+ * the series IDs the Directory named for its table URL.
+ */
+export interface SeriesTables {
+  readonly tables: Tables;
+  /** The requested series IDs, keyed by the table URL that holds them. */
+  readonly seriesIds: ReadonlyMap<string, ReadonlySet<string>>;
 }
 
 /** A Time Series Directory query: by catalogue number or by series ID. */
@@ -77,22 +85,31 @@ const fetchDirectory = Effect.fn("fetchDirectory")(function* (
 });
 
 /**
- * Keep only rows that link to a table, from the latest release of each table.
+ * Group Directory rows by table URL.
  *
- * A table is one `TableURL`, as `readabs` groups it in `read_abs`. Rows with an
- * empty `TableURL` link to no table.
+ * `Map.groupBy` keeps first-appearance order and yields no empty group.
+ */
+const byTableUrl = (
+  rows: ReadonlyArray<DirectoryRow>,
+): ReadonlyMap<string, ReadonlyArray<DirectoryRow>> => Map.groupBy(rows, (row) => row.tableUrl);
+
+/**
+ * Keep only rows with a table URL, from the latest release of each table.
+ *
+ * A table is one `TableURL`, as `readabs` groups it in `read_abs`. A row with
+ * an empty `TableURL` names no table.
  */
 const latestRows = (rows: ReadonlyArray<DirectoryRow>): ReadonlyArray<DirectoryRow> => {
-  const linked = rows.filter((row) => row.tableUrl.trim() !== "");
+  const withTable = rows.filter((row) => row.tableUrl.trim() !== "");
 
   const latestDates = new Map(
-    [...Map.groupBy(linked, (row) => row.tableUrl)].map(([tableUrl, group]) => [
+    [...byTableUrl(withTable)].map(([tableUrl, group]) => [
       tableUrl,
       group.reduce((latest, row) => (row.releaseDate > latest ? row.releaseDate : latest), ""),
     ]),
   );
 
-  return linked.filter((row) => latestDates.get(row.tableUrl) === row.releaseDate);
+  return withTable.filter((row) => latestDates.get(row.tableUrl) === row.releaseDate);
 };
 
 /** The table of a Directory row: the file name of its URL, and its title. */
@@ -147,7 +164,7 @@ const selectTables = (
  * @param catalogueNumber - The decoded catalogue number.
  * @param tableNumbers - The requested table numbers. None reads every table.
  * @returns An Effect that yields the tables by table URL, in Directory order.
- * It fails with `CatalogueNotFound` when no row links to a table, and with
+ * It fails with `CatalogueNotFound` when no row names a table URL, and with
  * `TableNotFound` when a table number names no table.
  */
 export const catalogueTables: (
@@ -167,8 +184,7 @@ export const catalogueTables: (
     return yield* new CatalogueNotFound({ catalogueNumber });
   }
 
-  // Map.groupBy keeps first-appearance order and yields no empty group.
-  const tableRows = [...Map.groupBy(rows, (row) => row.tableUrl).values()].flatMap(([first]) =>
+  const tableRows = [...byTableUrl(rows).values()].flatMap(([first]) =>
     first === undefined ? [] : [first],
   );
 
@@ -178,25 +194,62 @@ export const catalogueTables: (
 });
 
 /**
- * The table that holds a series, and its Directory row.
+ * The Directory row of the table that holds a series.
  *
  * The row is the lowest `TableOrder` of the latest release, as `readabs` picks
- * it, so no series appears twice.
- *
- * @param seriesId - The decoded series ID.
- * @returns An Effect that yields the table and row, or `undefined` when the
- * Directory lists the series in no table.
+ * it, so no series appears twice. An unknown series ID yields `undefined`.
  */
-export const seriesTable: (
+const seriesRow = (
   seriesId: SeriesId,
-) => Effect.Effect<
-  SeriesTable | undefined,
+): Effect.Effect<
+  DirectoryRow | undefined,
   TimeSeriesDirectoryError | AbsUnavailable,
   HttpClient.HttpClient
-> = Effect.fn("seriesTable")(function* (seriesId: SeriesId) {
-  const row = latestRows(yield* fetchDirectory("sid", seriesId))
-    .toSorted((first, second) => first.tableOrder - second.tableOrder)
-    .at(0);
+> =>
+  Effect.map(fetchDirectory("sid", seriesId), (rows) =>
+    latestRows(rows)
+      .toSorted((first, second) => first.tableOrder - second.tableOrder)
+      .at(0),
+  );
 
-  return row === undefined ? undefined : { table: tableOf(row), row };
+/**
+ * The tables that hold series IDs, and the series IDs to keep from each.
+ *
+ * Looks up each distinct series ID under the concurrency limit.
+ *
+ * @param seriesIds - The decoded series IDs.
+ * @returns An Effect that yields the tables by table URL, in request order,
+ * with the series IDs each holds. It fails with one `SeriesNotFound` that
+ * names every series ID the Directory lists in no table.
+ */
+export const seriesTables: (
+  seriesIds: ReadonlyArray<SeriesId>,
+) => Effect.Effect<
+  SeriesTables,
+  SeriesNotFound | TimeSeriesDirectoryError | AbsUnavailable,
+  HttpClient.HttpClient
+> = Effect.fn("seriesTables")(function* (seriesIds: ReadonlyArray<SeriesId>) {
+  const found = yield* Effect.forEach(
+    new Set(seriesIds),
+    (seriesId) => Effect.map(seriesRow(seriesId), (row) => ({ seriesId, row })),
+    { concurrency: ABS_CONCURRENCY },
+  );
+
+  const missing = found.filter(({ row }) => row === undefined).map(({ seriesId }) => seriesId);
+
+  if (missing.length > 0) {
+    return yield* new SeriesNotFound({ seriesIds: missing });
+  }
+
+  const rows = found.map(({ row }) => row).filter(Predicate.isNotUndefined);
+
+  return {
+    tables: new Map(rows.map((row) => [row.tableUrl, tableOf(row)])),
+    seriesIds: new Map(
+      [...byTableUrl(rows)].map(([tableUrl, group]) => [
+        tableUrl,
+        new Set(group.map((row) => row.seriesId)),
+      ]),
+    ),
+  };
 });

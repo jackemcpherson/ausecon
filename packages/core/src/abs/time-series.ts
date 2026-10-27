@@ -1,4 +1,4 @@
-import { Effect, Match, Predicate } from "effect";
+import { Effect, Match } from "effect";
 import type { HttpClient } from "effect/http";
 
 import type {
@@ -9,16 +9,15 @@ import type {
   DecodedAbsRequest,
   InvalidRequest,
   Series,
+  SeriesNotFound,
   SeriesRequest,
   TableNotFound,
   TimeSeriesDirectoryError,
   TableLayoutError,
 } from "../types";
-import { SeriesNotFound } from "../types";
 import { readTables } from "./download";
-import { ABS_CONCURRENCY } from "./http";
 import { decodeRequest } from "./request";
-import { catalogueTables, seriesTable } from "./time-series-directory";
+import { catalogueTables, seriesTables } from "./time-series-directory";
 
 /** Every error a read can fail with. */
 export type ReadAbsError =
@@ -42,36 +41,11 @@ const readSeries = (
   request: SeriesRequest,
 ): Effect.Effect<ReadonlyArray<Series>, ReadAbsError, HttpClient.HttpClient> =>
   Effect.gen(function* () {
-    const found = yield* Effect.forEach(
-      new Set(request.seriesIds),
-      (seriesId) => Effect.map(seriesTable(seriesId), (located) => ({ seriesId, located })),
-      { concurrency: ABS_CONCURRENCY },
-    );
-
-    const missing = found
-      .filter(({ located }) => located === undefined)
-      .map(({ seriesId }) => seriesId);
-
-    if (missing.length > 0) {
-      return yield* new SeriesNotFound({ seriesIds: missing });
-    }
-
-    const located = found.map((entry) => entry.located).filter(Predicate.isNotUndefined);
-
-    // The series IDs each table URL holds, since two tables can share a table ID.
-    const wanted = new Map(
-      [...Map.groupBy(located, ({ row }) => row.tableUrl)].map(([tableUrl, group]) => [
-        tableUrl,
-        new Set(group.map(({ row }) => row.seriesId)),
-      ]),
-    );
-
-    const tables = yield* readTables(
-      new Map(located.map(({ table, row }) => [row.tableUrl, table])),
-    );
+    const located = yield* seriesTables(request.seriesIds);
+    const tables = yield* readTables(located.tables);
 
     return tables.flatMap(({ tableUrl, series }) =>
-      series.filter(({ seriesId }) => wanted.get(tableUrl)?.has(seriesId) === true),
+      series.filter(({ seriesId }) => located.seriesIds.get(tableUrl)?.has(seriesId) === true),
     );
   });
 
