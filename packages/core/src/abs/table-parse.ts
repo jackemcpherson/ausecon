@@ -22,7 +22,7 @@ const SKIPPED_SHEETS = new Set([
 ]);
 
 /** `readabs` also skips any sheet whose name contains `Table` and a space. */
-const TABLE_SHEET = /table /i;
+const TABLE_SHEET = /Table /;
 
 /** Zero-based row of the `Series ID` label: spreadsheet row 10. */
 const SERIES_ID_ROW = 9;

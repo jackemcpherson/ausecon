@@ -162,6 +162,23 @@ describe("readAbs on a synthetic release", () => {
     }),
   );
 
+  it.effect("skips sheets named with Table and a space, matching case", () =>
+    Effect.gen(function* () {
+      const table1 = syntheticTable([
+        ["Table 1", [["Not data"]]],
+        ["Data table 1", absDataSheet([INDEX_SERIES], [[46023, 100]])],
+      ]);
+
+      const { observations } = yield* readSynthetic(table1);
+
+      expect(
+        observations
+          .filter((observation) => observation.tableId === "123401")
+          .map((observation) => observation.sheet),
+      ).toEqual(["Data table 1"]);
+    }),
+  );
+
   it.effect("fails with WorkbookLayoutError when row 10 does not hold Series ID", () =>
     Effect.gen(function* () {
       const table1 = syntheticTable([
