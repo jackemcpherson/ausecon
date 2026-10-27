@@ -24,6 +24,18 @@ const OBSERVATION_COUNT = 73_357;
 
 const TABLE_1_URL = `${WAGE_PRICE_INDEX_RELEASE}634501.xlsx`;
 
+const MODELLERS_DATABASE_TABLE_URL =
+  "https://www.abs.gov.au/statistics/economy/national-accounts/modellers-database/latest-release/1364015003.xlsx";
+
+/** Recorded `sid` responses for two series from two catalogue numbers, and their tables. */
+const seriesResponses = (): ReadonlyMap<string, RecordedResponse> =>
+  new Map([
+    [directoryUrl({ sid: "A2603039T" }), recorded("sid-A2603039T.xml")],
+    [directoryUrl({ sid: "A2454446F" }), recorded("sid-A2454446F.xml")],
+    [TABLE_1_URL, recorded("634501.xlsx")],
+    [MODELLERS_DATABASE_TABLE_URL, recorded("1364015003.xlsx")],
+  ]);
+
 const ANSI_ESCAPE = "\u001B[";
 
 /** The recorded 6345.0 responses with one response replaced. */
@@ -114,6 +126,8 @@ describe("ausecon abs get --catalogue", () => {
       );
       expect(result.stdout).toContain("6202.0");
       expect(result.stdout).toContain("--no-metadata");
+      expect(result.stdout).toContain("ausecon abs get --catalogue 6202.0 --table 1 --table 12");
+      expect(result.stdout).toContain("ausecon abs get --series A2603039T --series A2454446F");
       expect(result.stdout).not.toContain(ANSI_ESCAPE);
     }),
   );
@@ -141,9 +155,80 @@ describe("ausecon abs get --catalogue", () => {
   );
 });
 
+/** The distinct table IDs in CSV output with metadata, in first-seen order. */
+const tableIdsOf = (stdout: string): ReadonlyArray<string> => [
+  ...new Set(
+    stdout
+      .split("\n")
+      .slice(1)
+      .map((line) => line.slice(0, line.indexOf(","))),
+  ),
+];
+
+describe("ausecon abs get --table", () => {
+  it.effect("reads only the tables named by repeated --table flags", () =>
+    Effect.gen(function* () {
+      const http = fixtureHttpClient(wagePriceIndexResponses());
+
+      const result = yield* runCli(
+        ["abs", "get", "--catalogue", "6345.0", "--table", "1", "--table", "7a"],
+        http.layer,
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stderr).toBe("");
+      expect(result.stdout.split("\n").slice(0, 2)).toEqual([METADATA_HEADER, FIRST_METADATA_ROW]);
+      expect(tableIdsOf(result.stdout)).toEqual(["634501", "634507a"]);
+      expect(http.requests.filter((request) => request.url.endsWith(".xlsx"))).toHaveLength(2);
+    }),
+  );
+});
+
+describe("ausecon abs get --series", () => {
+  it.effect("reads every series named by repeated --series flags", () =>
+    Effect.gen(function* () {
+      const http = fixtureHttpClient(seriesResponses());
+
+      const result = yield* runCli(
+        ["abs", "get", "--series", "A2603039T", "--series", "a2454446f", "--no-metadata"],
+        http.layer,
+      );
+
+      const counts = Map.groupBy(result.stdout.split("\n").slice(1), (line) =>
+        line.slice(0, line.indexOf(",")),
+      );
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stderr).toBe("");
+      expect(result.stdout.split("\n")[0]).toBe("seriesId,date,value");
+      // `NoObs` in the recorded Time Series Directory rows.
+      expect(
+        Object.fromEntries([...counts].map(([seriesId, lines]) => [seriesId, lines.length])),
+      ).toEqual({
+        A2603039T: 116,
+        A2454446F: 268,
+      });
+    }),
+  );
+});
+
 describe("ausecon abs get failures", () => {
   it.effect.each([
-    { name: "no --catalogue", argv: ["abs", "get"], message: "Pass --catalogue" },
+    {
+      name: "neither --catalogue nor --series",
+      argv: ["abs", "get"],
+      message: "Pass --catalogue <catalogue number> or --series <series ID>.",
+    },
+    {
+      name: "both --catalogue and --series",
+      argv: ["abs", "get", "--catalogue", "6345.0", "--series", "A2603039T"],
+      message: "Pass --catalogue or --series, not both.",
+    },
+    {
+      name: "--table without --catalogue",
+      argv: ["abs", "get", "--series", "A2603039T", "--table", "1"],
+      message: "--table needs --catalogue",
+    },
     {
       name: "an unknown --format",
       argv: ["abs", "get", "--catalogue", "6345.0", "--format", "xml"],
@@ -189,6 +274,48 @@ describe("ausecon abs get failures", () => {
       expect(result.stderr).toBe(
         "ausecon: The Time Series Directory has no series for catalogue number 9999.0.\n" +
           "Check the catalogue number on the ABS website, such as 6345.0 for the Wage Price Index.",
+      );
+    }),
+  );
+
+  it.effect("exits 3 and names every unknown table number", () =>
+    Effect.gen(function* () {
+      const http = fixtureHttpClient(wagePriceIndexResponses());
+
+      const result = yield* runCli(
+        ["abs", "get", "--catalogue", "6345.0", "--table", "1", "--table", "6", "--table", "x99"],
+        http.layer,
+      );
+
+      expect(result.exitCode).toBe(3);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toBe(
+        "ausecon: Catalogue number 6345.0 has no table numbered 6, X99.\n" +
+          "Leave out --table to read every table, then pick table numbers from the tableTitle column.",
+      );
+    }),
+  );
+
+  it.effect("exits 3 and names every unknown series ID", () =>
+    Effect.gen(function* () {
+      const http = fixtureHttpClient(
+        new Map([
+          ...seriesResponses(),
+          [directoryUrl({ sid: "A2325807L" }), recorded("sid-A2325807L.xml")],
+          [directoryUrl({ sid: "Z9999999Z" }), recorded("sid-A2325807L.xml")],
+        ]),
+      );
+
+      const result = yield* runCli(
+        ["abs", "get", "--series", "A2325807L", "--series", "A2603039T", "--series", "z9999999z"],
+        http.layer,
+      );
+
+      expect(result.exitCode).toBe(3);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toBe(
+        "ausecon: The Time Series Directory has no record of series ID A2325807L, Z9999999Z.\n" +
+          "Check the series ID in the ABS table that holds it.",
       );
     }),
   );
