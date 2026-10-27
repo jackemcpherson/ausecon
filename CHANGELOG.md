@@ -17,7 +17,7 @@ This release returns series from `readAbs`.
   `value` pairs. A series request returns only the requested series.
 - `Series.seriesId` is the branded `SeriesId`, the same type as
   `SeriesNotFound.seriesIds`. A table whose row 10 holds text that is not a
-  series ID fails with `WorkbookLayoutError`.
+  series ID fails with `TableLayoutError`.
 - `readAbs` takes one argument. This release removes the options argument,
   `hasMetadata`, `ReadOptions`, and `ObservationValue`.
 - `@ausecon/core` no longer exports the decoded request schemas
@@ -25,6 +25,16 @@ This release returns series from `readAbs`.
 - `ausecon abs get --format json` writes the list of series as `readAbs`
   returns it. With `--no-metadata`, each series holds only its series ID and
   observations. CSV output does not change.
+- `WorkbookLayoutError` is now `TableLayoutError`, with the same fields.
+- `AbsUnavailable` replaces Effect's `HttpClientError`. It carries the URL,
+  the status if the ABS answered, and the cause as text. `ReadAbsError` holds
+  only errors the library defines.
+- A Time Series Directory response that is not a series index fails with
+  `TimeSeriesDirectoryError`, which names the URL and the reason. An error
+  document is one such response. It no longer fails as an HTTP decode error.
+- `ausecon` exits 1, not 4, when the Time Series Directory answers with an
+  error document, and asks for a report. Exit 4 names the URL. Without a
+  status it points at the network. With one it suggests trying later.
 
 ## 0.1.0 - 2026-10-27
 
