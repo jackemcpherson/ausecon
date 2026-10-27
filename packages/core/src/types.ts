@@ -99,7 +99,7 @@ export type DecodedAbsRequest = typeof DecodedAbsRequest.Type;
  * One table of a release: its table ID and, when known, its ABS title.
  *
  * Table IDs are not unique: two tables in different releases can share a file
- * name and so a table ID. The read tells them apart by table URL internally.
+ * name and so a table ID. The library tells them apart by table URL internally.
  */
 export const Table = Schema.Struct({
   tableId: TableId,

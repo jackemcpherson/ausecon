@@ -294,6 +294,43 @@ describe("readAbs on a synthetic release", () => {
       expect(error).not.toHaveProperty("sheet");
     }),
   );
+  it.effect("keeps the title of each table when two tables share a file name", () =>
+    Effect.gen(function* () {
+      const firstUrl = "https://www.abs.gov.au/synthetic/first/latest-release/data.xlsx";
+      const secondUrl = "https://www.abs.gov.au/synthetic/second/latest-release/data.xlsx";
+
+      const row = (tableUrl: string, title: string, tableOrder: number, seriesId: string) =>
+        `<Series><ProductReleaseDate>15/04/2026</ProductReleaseDate><TableURL>${tableUrl}</TableURL><TableTitle>${title}</TableTitle><TableOrder>${tableOrder}</TableOrder><SeriesID>${seriesId}</SeriesID></Series>`;
+
+      const table = (series: SyntheticSeries): RecordedResponse => ({
+        status: 200,
+        body: syntheticTable([["Data1", absDataSheet([series], [[46023, 1]])]]),
+      });
+
+      const http = fixtureHttpClient(
+        new Map<string, RecordedResponse>([
+          [
+            directoryUrl({ catno: "1234.0" }),
+            {
+              status: 200,
+              body: `<?xml version="1.0" encoding="utf-8" ?><TimeSeriesIndex>${row(firstUrl, "Table 1. First", 1, "A1000001A")}${row(secondUrl, "Table 2. Second", 2, "A1000002B")}</TimeSeriesIndex>`,
+            },
+          ],
+          [firstUrl, table(INDEX_SERIES)],
+          [secondUrl, table(COUNT_SERIES)],
+        ]),
+      );
+
+      const series = yield* readAbs(AbsRequest.Catalogue({ catalogueNumber: "1234.0" })).pipe(
+        Effect.provide(http.layer),
+      );
+
+      expect(series.map(({ seriesId, table }) => [seriesId, table])).toEqual([
+        ["A1000001A", { tableId: "data", tableTitle: "Table 1. First" }],
+        ["A1000002B", { tableId: "data", tableTitle: "Table 2. Second" }],
+      ]);
+    }),
+  );
 });
 
 describe("readAbs edge responses", () => {

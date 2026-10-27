@@ -30,8 +30,15 @@ _Avoid_: Table index, table no
 
 **Table ID**:
 The file name of a table without its extension, such as `6202001`. Table IDs
-are not always numeric, such as `62020x28` or `3222_table_a1`.
+are not always numeric, such as `62020x28` or `3222_table_a1`. Two tables can
+share a table ID when their table URLs end in the same file name.
 _Avoid_: Table number, table no, table code
+
+**Table URL**:
+The address of a table that the Time Series Directory lists, such as
+`https://www.abs.gov.au/.../6202001.xlsx`. The table URL identifies a table,
+because table IDs are not unique.
+_Avoid_: Link, file URL, spreadsheet URL
 
 **Series**:
 One sequence of observations of one measure at one frequency.

@@ -143,6 +143,46 @@ describe("readAbs for series IDs", () => {
     }),
   );
 
+  it.effect(
+    "titles a series from the latest release when an older one has a lower table order",
+    () =>
+      Effect.gen(function* () {
+        const tableUrl = "https://www.abs.gov.au/synthetic/latest-release/123401.xlsx";
+
+        const row = (releaseDate: string, title: string, tableOrder: number) =>
+          `<Series><ProductReleaseDate>${releaseDate}</ProductReleaseDate><TableURL>${tableUrl}</TableURL><TableTitle>${title}</TableTitle><TableOrder>${tableOrder}</TableOrder><SeriesID>A1000001A</SeriesID></Series>`;
+
+        const http = fixtureHttpClient(
+          new Map<string, RecordedResponse>([
+            [
+              directoryUrl({ sid: "A1000001A" }),
+              {
+                status: 200,
+                body: `<?xml version="1.0" encoding="utf-8" ?><TimeSeriesIndex>${row("15/01/2026", "Table 1. Superseded", 1)}${row("15/04/2026", "Table 1. Current", 2)}</TimeSeriesIndex>`,
+              },
+            ],
+            [
+              tableUrl,
+              {
+                status: 200,
+                body: syntheticTable([
+                  ["Data1", absDataSheet([syntheticSeries("A1000001A")], [[46023, 1]])],
+                ]),
+              },
+            ],
+          ]),
+        );
+
+        const series = yield* readAbs(AbsRequest.Series({ seriesIds: ["A1000001A"] })).pipe(
+          Effect.provide(http.layer),
+        );
+
+        expect(series.map(({ table }) => table)).toEqual([
+          { tableId: "123401", tableTitle: "Table 1. Current" },
+        ]);
+      }),
+  );
+
   it.effect("upper-cases lower-case series IDs", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(seriesResponses());

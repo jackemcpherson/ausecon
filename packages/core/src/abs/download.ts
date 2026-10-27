@@ -2,51 +2,39 @@ import { Effect } from "effect";
 import type { HttpClient } from "effect/http";
 
 import type { AbsUnavailable, Series, TableLayoutError } from "../types";
-import { fetchBytes } from "./http";
-import type { DirectoryTable } from "./latest-release";
+import { ABS_CONCURRENCY, fetchBytes } from "./http";
 import { parseTable } from "./table-parse";
+import type { Tables } from "./time-series-directory";
 
-/** The most tables downloaded at once. */
-const DOWNLOAD_CONCURRENCY = 4;
-
-/** One downloaded table and its series. */
+/** The Series of one downloaded table, and the table URL it came from. */
 export interface TableSeries {
-  readonly table: DirectoryTable;
+  readonly tableUrl: string;
   readonly series: ReadonlyArray<Series>;
 }
 
 /**
  * Download and parse tables.
  *
- * Downloads each distinct `TableURL` once, with a concurrency limit, after
- * replacing spaces in the URL with `+`.
+ * Downloads each table URL once, under the concurrency limit, after replacing
+ * spaces in the URL with `+`.
  *
- * @param tables - The tables to read.
- * @returns An Effect that yields each distinct table with its series, in
- * table order.
+ * @param tables - The tables to read, by table URL.
+ * @returns An Effect that yields the Series of each table, in table order.
  */
 export const readTables: (
-  tables: ReadonlyArray<DirectoryTable>,
+  tables: Tables,
 ) => Effect.Effect<
   ReadonlyArray<TableSeries>,
   TableLayoutError | AbsUnavailable,
   HttpClient.HttpClient
-> = Effect.fn("readTables")(function* (tables: ReadonlyArray<DirectoryTable>) {
-  const distinct = [...new Map(tables.map((table) => [table.tableUrl, table])).values()];
-
+> = Effect.fn("readTables")(function* (tables: Tables) {
   return yield* Effect.forEach(
-    distinct,
-    (table) =>
-      fetchBytes(table.tableUrl.replaceAll(" ", "+")).pipe(
-        // The Table names no URL, so the series do not carry it.
-        Effect.flatMap((body) =>
-          parseTable(body, {
-            tableId: table.tableId,
-            tableTitle: table.tableTitle,
-          }),
-        ),
-        Effect.map((series) => ({ table, series })),
+    tables,
+    ([tableUrl, table]) =>
+      fetchBytes(tableUrl.replaceAll(" ", "+")).pipe(
+        Effect.flatMap((body) => parseTable(body, table)),
+        Effect.map((series) => ({ tableUrl, series })),
       ),
-    { concurrency: DOWNLOAD_CONCURRENCY },
+    { concurrency: ABS_CONCURRENCY },
   );
 });
