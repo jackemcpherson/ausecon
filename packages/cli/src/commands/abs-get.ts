@@ -2,7 +2,7 @@ import { AbsRequest, readAbs } from "@ausecon/core";
 import { Console, Effect, Option, Stdio } from "effect";
 import { CliError, Command, Flag } from "effect/cli";
 
-import { METADATA_COLUMNS, OUTPUT_FORMATS, VALUE_COLUMNS, renderObservations } from "../output";
+import { OUTPUT_FORMATS, renderSeries } from "../output";
 
 const flags = {
   catalogue: Flag.String("catalogue").pipe(
@@ -21,10 +21,13 @@ const flags = {
     Flag.withDescription("Output format: csv or json."),
     Flag.withDefault("csv"),
   ),
-  shouldOmitMetadata: Flag.Boolean("no-metadata").pipe(
-    Flag.withDescription("Write only series ID, date, and value."),
+  hasMetadata: Flag.Boolean("no-metadata").pipe(
+    Flag.withDescription(
+      "Leave out the metadata: write series ID, date, and value as CSV, or series ID and observations as JSON.",
+    ),
     Flag.withoutNegation,
     Flag.withDefault(false),
+    Flag.map((hasNoMetadata) => !hasNoMetadata),
   ),
 };
 
@@ -57,14 +60,11 @@ const requestOf = (input: GetInput): Effect.Effect<AbsRequest, CliError.Validati
 const get = Effect.fn("absGet")(function* (input: GetInput) {
   const request = yield* requestOf(input);
   const isTerminal = yield* (yield* Stdio.Stdio).stdoutIsTerminal;
+  const series = yield* readAbs(request);
 
-  const render = renderObservations(input.format, isTerminal);
-
-  const output = input.shouldOmitMetadata
-    ? render(VALUE_COLUMNS, yield* readAbs(request, { hasMetadata: false }))
-    : render(METADATA_COLUMNS, yield* readAbs(request));
-
-  yield* Console.log(output);
+  yield* Console.log(
+    renderSeries(series, { format: input.format, hasMetadata: input.hasMetadata, isTerminal }),
+  );
 });
 
 /** The `ausecon abs get` command: read ABS time series to stdout. */
@@ -91,7 +91,7 @@ export const absGet = Command.make("get", flags, get).pipe(
     },
     {
       command: "ausecon abs get --catalogue 6345.0 --format json --no-metadata",
-      description: "Print only series ID, date, and value as JSON",
+      description: "Print each series ID and its observations as JSON, without metadata",
     },
   ]),
 );

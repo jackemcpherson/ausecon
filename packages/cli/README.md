@@ -41,7 +41,10 @@ Read a watch list of series IDs from any catalogue numbers:
 ausecon abs get --series A2603039T --series A2454446F
 ```
 
-Print only the series ID, date, and value as JSON:
+CSV has one row per observation, with the 12 `readabs` columns. JSON is a
+list of series, each with its metadata, its table, and its observations as
+`date` and `value` pairs. `--no-metadata` writes only series ID, date, and
+value as CSV, and only the series ID and observations of each series as JSON:
 
 ```shell
 ausecon abs get --catalogue 6345.0 --format json --no-metadata

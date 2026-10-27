@@ -116,7 +116,7 @@ describe("ausecon abs get --catalogue", () => {
     }),
   );
 
-  it.effect("writes one compact JSON array when stdout is not a terminal", () =>
+  it.effect("writes each Series with only its series ID and observations as compact JSON", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(wagePriceIndexResponses());
 
@@ -128,12 +128,12 @@ describe("ausecon abs get --catalogue", () => {
       expect(result.exitCode).toBe(0);
       expect(result.stdout).not.toContain("\n");
       expect(result.stdout).toMatch(
-        /^\[\{"seriesId":"A2603039T","date":"1997-09-01","value":67\.4\},/u,
+        /^\[\{"seriesId":"A2603039T","observations":\[\{"date":"1997-09-01","value":67\.4\},/u,
       );
     }),
   );
 
-  it.effect("pretty-prints JSON with metadata when stdout is a terminal", () =>
+  it.effect("pretty-prints the Series list as JSON when stdout is a terminal", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(wagePriceIndexResponses());
 
@@ -143,10 +143,19 @@ describe("ausecon abs get --catalogue", () => {
         { isTerminal: true },
       );
 
+      const series: unknown = JSON.parse(result.stdout);
+
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toMatch(
-        /^\[\n {2}\{\n {4}"tableId": "634501",\n {4}"sheet": "Data1",/u,
+        /^\[\n {2}\{\n {4}"seriesId": "A2603039T",\n {4}"seriesDescription": "Quarterly Index ;/u,
       );
+      expect(series).toHaveLength(929);
+      expect(series).toHaveProperty([0, "table"], {
+        tableId: "634501",
+        tableTitle:
+          "Table 1. Total Hourly Rates of Pay Excluding Bonuses: Sector, Original, Seasonally Adjusted and Trend",
+      });
+      expect(series).toHaveProperty([0, "observations", 0], { date: "1997-09-01", value: 67.4 });
     }),
   );
 
