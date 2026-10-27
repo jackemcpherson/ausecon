@@ -91,7 +91,7 @@ const catalogueTables = (
 const readCatalogue = (
   request: CatalogueRequest,
 ): Effect.Effect<ReadonlyArray<Observation>, ReadAbsError, HttpClient.HttpClient> =>
-  catalogueTables(request).pipe(Effect.flatMap(readTables));
+  catalogueTables(request).pipe(Effect.flatMap((tables) => readTables(tables, () => true)));
 
 /** The most series IDs looked up in the Time Series Directory at once. */
 const SERIES_CONCURRENCY = 4;
@@ -131,15 +131,12 @@ const readSeries = (
     }
 
     const rows = found.flatMap(([, row]) => (row === undefined ? [] : [row]));
-    const tables = tablesOf(rows);
-    const tableIds = new Map(tables.map((table) => [table.tableUrl, table.tableId]));
-    const wanted = Map.groupBy(rows, (row) => tableIds.get(row.tableUrl));
-    const observations = yield* readTables(tables);
 
-    return observations.filter(
-      (observation) =>
-        wanted.get(observation.tableId)?.some((row) => row.seriesId === observation.seriesId) ??
-        false,
+    // Keyed by URL, because two tables can share a file name and so a table ID.
+    const wanted = new Set(rows.map((row) => `${row.tableUrl} ${row.seriesId}`));
+
+    return yield* readTables(tablesOf(rows), (table, observation) =>
+      wanted.has(`${table.tableUrl} ${observation.seriesId}`),
     );
   });
 

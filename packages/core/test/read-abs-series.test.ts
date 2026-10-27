@@ -3,11 +3,13 @@ import { Effect, Schema } from "effect";
 
 import { AbsRequest, SeriesId, SeriesNotFound, readAbs } from "../src/index";
 import {
+  type RecordedResponse,
   WAGE_PRICE_INDEX_RELEASE,
   directoryUrl,
   fixtureHttpClient,
   recorded,
 } from "./fixture-http-client";
+import { type SyntheticSeries, absDataSheet, syntheticTable } from "./synthetic-table";
 
 const MODELLERS_DATABASE_RELEASE =
   "https://www.abs.gov.au/statistics/economy/national-accounts/modellers-database/latest-release/";
@@ -23,6 +25,23 @@ const seriesResponses = () =>
     [`${WAGE_PRICE_INDEX_RELEASE}634501.xlsx`, recorded("634501.xlsx")],
     [`${MODELLERS_DATABASE_RELEASE}1364015003.xlsx`, recorded("1364015003.xlsx")],
   ]);
+
+/** A synthetic series with the given series ID. */
+const syntheticSeries = (seriesId: string): SyntheticSeries => ({
+  description: `Synthetic series ${seriesId} ;`,
+  unit: "Number",
+  seriesType: "Original",
+  dataType: "FLOW",
+  frequency: "Month",
+  collectionMonth: 1,
+  seriesId,
+});
+
+/** A `sid` response with one row that links to a table. */
+const sidResponse = (seriesId: string, tableUrl: string): RecordedResponse => ({
+  status: 200,
+  body: `<?xml version="1.0" encoding="utf-8" ?><TimeSeriesIndex><Series><ProductReleaseDate>15/04/2026</ProductReleaseDate><TableURL>${tableUrl}</TableURL><TableTitle>Table 1. Synthetic</TableTitle><TableOrder>1</TableOrder><SeriesID>${seriesId}</SeriesID></Series></TimeSeriesIndex>`,
+});
 
 const countBySeries = (observations: ReadonlyArray<{ readonly seriesId: string }>) =>
   Object.fromEntries(
@@ -78,6 +97,45 @@ describe("readAbs for series IDs", () => {
         directoryUrl({ sid: "A2603039T" }),
         directoryUrl({ sid: "A2713846W" }),
         `${WAGE_PRICE_INDEX_RELEASE}634501.xlsx`,
+      ]);
+    }),
+  );
+
+  it.effect("reads each series only from its own table when two tables share a file name", () =>
+    Effect.gen(function* () {
+      const firstUrl = "https://www.abs.gov.au/synthetic/first/latest-release/data.xlsx";
+      const secondUrl = "https://www.abs.gov.au/synthetic/second/latest-release/data.xlsx";
+
+      // Both tables hold both series, with a different value in each table.
+      const table = (value: number): RecordedResponse => ({
+        status: 200,
+        body: syntheticTable([
+          [
+            "Data1",
+            absDataSheet(
+              [syntheticSeries("A1000001A"), syntheticSeries("A1000002B")],
+              [[46023, value, value]],
+            ),
+          ],
+        ]),
+      });
+
+      const http = fixtureHttpClient(
+        new Map([
+          [directoryUrl({ sid: "A1000001A" }), sidResponse("A1000001A", firstUrl)],
+          [directoryUrl({ sid: "A1000002B" }), sidResponse("A1000002B", secondUrl)],
+          [firstUrl, table(1)],
+          [secondUrl, table(2)],
+        ]),
+      );
+
+      const observations = yield* readAbs(
+        AbsRequest.Series({ seriesIds: ["A1000001A", "A1000002B"] }),
+      ).pipe(Effect.provide(http.layer));
+
+      expect(observations.map(({ seriesId, value }) => [seriesId, value])).toEqual([
+        ["A1000001A", 1],
+        ["A1000002B", 2],
       ]);
     }),
   );

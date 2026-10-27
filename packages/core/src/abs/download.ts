@@ -16,16 +16,21 @@ const DOWNLOAD_CONCURRENCY = 4;
  * replacing spaces in the URL with `+`.
  *
  * @param tables - The tables to read.
- * @returns An Effect that yields the observations of every table, in table
- * order.
+ * @param isWanted - Whether to keep an observation of a table.
+ * @returns An Effect that yields the kept observations of every table, in
+ * table order.
  */
 export const readTables: (
   tables: ReadonlyArray<DirectoryTable>,
+  isWanted: (table: DirectoryTable, observation: Observation) => boolean,
 ) => Effect.Effect<
   ReadonlyArray<Observation>,
   WorkbookLayoutError | HttpClientError.HttpClientError,
   HttpClient.HttpClient
-> = Effect.fn("readTables")(function* (tables: ReadonlyArray<DirectoryTable>) {
+> = Effect.fn("readTables")(function* (
+  tables: ReadonlyArray<DirectoryTable>,
+  isWanted: (table: DirectoryTable, observation: Observation) => boolean,
+) {
   const client = yield* absHttpClient;
   const distinct = [...new Map(tables.map((table) => [table.tableUrl, table])).values()];
 
@@ -35,6 +40,9 @@ export const readTables: (
       client.get(table.tableUrl.replaceAll(" ", "+")).pipe(
         Effect.flatMap((response) => response.arrayBuffer),
         Effect.flatMap((body) => parseTable(new Uint8Array(body), table)),
+        Effect.map((observations) =>
+          observations.filter((observation) => isWanted(table, observation)),
+        ),
       ),
     { concurrency: DOWNLOAD_CONCURRENCY },
   );
