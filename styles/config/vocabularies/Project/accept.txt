@@ -792,3 +792,5 @@ Optus
 (?i)ausecon
 (?i)servlet
 (?i)datacube
+(?i)oxfmt
+(?i)oxlint

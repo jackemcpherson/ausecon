@@ -10,9 +10,25 @@ The project ports the `readabs` and `readrba` R packages to TypeScript.
 
 ## Status
 
-The project is in design. No release exists.
+The project is in development. No release exists.
 
-The `docs/research/` directory holds the research notes for the first release.
+The first release reads ABS time series by catalogue number and table number,
+or by series ID.
+
+## Development
+
+Install the dependencies with Bun, then run the checks:
+
+```shell
+bun install
+bun run check
+bun run typecheck
+bun run test
+bun run build
+```
+
+The `GLOSSARY.md` file defines the domain terms. The `docs/adr/` directory
+records the architecture decisions.
 
 ## References
 

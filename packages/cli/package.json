@@ -1,0 +1,29 @@
+{
+  "name": "ausecon",
+  "version": "0.0.0",
+  "description": "Read Australian economic data from the ABS and RBA in your terminal.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jackemcpherson/ausecon.git",
+    "directory": "packages/cli"
+  },
+  "bin": {
+    "ausecon": "./dist/main.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "vp pack"
+  },
+  "dependencies": {
+    "@ausecon/core": "workspace:*",
+    "@effect/platform-node": "4.0.6",
+    "effect": "4.0.6"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

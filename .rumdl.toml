@@ -37,6 +37,7 @@ exclude = [
   "plans/**",
   "analysis/**",
   "docs/research/**",
+  "tools/oxlint/anti-slop/**",
   "sources/**",
   "logs/**",
   "skills/**",
