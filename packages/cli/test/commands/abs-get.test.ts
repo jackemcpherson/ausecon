@@ -10,7 +10,7 @@ import {
   recorded,
   wagePriceIndexResponses,
 } from "../../../core/test/fixture-http-client";
-import { syntheticTable } from "../../../core/test/synthetic-table";
+import { absDataSheet, syntheticTable } from "../../../core/test/synthetic-table";
 import { runCli } from "../run-cli";
 
 const METADATA_HEADER =
@@ -62,6 +62,40 @@ describe("ausecon abs get --catalogue", () => {
       expect(lines[0]).toBe(METADATA_HEADER);
       expect(lines[1]).toBe(FIRST_METADATA_ROW);
       expect(lines).toHaveLength(OBSERVATION_COUNT + 1);
+    }),
+  );
+
+  it.effect("quotes a CSV field that holds a line break", () =>
+    Effect.gen(function* () {
+      const http = fixtureHttpClient(
+        wagePriceIndexWith(TABLE_1_URL, {
+          status: 200,
+          body: syntheticTable([
+            [
+              "Data1",
+              absDataSheet(
+                [
+                  {
+                    description: "First line ;\nsecond line ;",
+                    unit: "Number",
+                    seriesType: "Original",
+                    dataType: "FLOW",
+                    frequency: "Month",
+                    collectionMonth: 1,
+                    seriesId: "A1000001A",
+                  },
+                ],
+                [[46023, 1]],
+              ),
+            ],
+          ]),
+        }),
+      );
+
+      const result = yield* runCli(["abs", "get", "--catalogue", "6345.0"], http.layer);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain(',"First line ;\nsecond line ;",1,');
     }),
   );
 
