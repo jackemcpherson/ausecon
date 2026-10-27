@@ -6,19 +6,22 @@ import {
   CatalogueNotFound,
   type CatalogueRequest,
   type DecodedAbsRequest,
-  InvalidRequest,
+  type InvalidRequest,
   type Observation,
   type ObservationValue,
   type ReadOptions,
-  type SeriesNotFound,
+  type SeriesId,
+  SeriesNotFound,
   type SeriesRequest,
-  type TableNotFound,
+  TableNotFound,
   type WorkbookLayoutError,
 } from "../types";
 import { readTables } from "./download";
+import { titleNamesTable } from "./table-number-parse";
 import { decodeRequest } from "./request";
 import { fetchDirectory } from "./time-series-directory";
 import {
+  type DirectoryRow,
   type DirectoryTable,
   latestReleases,
   tablesOf,
@@ -37,16 +40,34 @@ export type ReadAbsError =
 /**
  * Limit the tables of a catalogue number to the requested table numbers.
  *
- * Table number matching is not built yet, so a request with table numbers
- * fails rather than return tables the caller did not ask for.
+ * A request without table numbers reads every table. Otherwise the read keeps
+ * each table whose title names a requested table number, as ADR 0005 records,
+ * and fails with `TableNotFound` if any requested table number names no table.
  */
 const selectTables = (
   request: CatalogueRequest,
   tables: ReadonlyArray<DirectoryTable>,
-): Effect.Effect<ReadonlyArray<DirectoryTable>, InvalidRequest | TableNotFound> =>
-  request.tableNumbers.length === 0
-    ? Effect.succeed(tables)
-    : Effect.fail(new InvalidRequest({ message: "Table numbers are not supported yet." }));
+): Effect.Effect<ReadonlyArray<DirectoryTable>, TableNotFound> => {
+  if (request.tableNumbers.length === 0) {
+    return Effect.succeed(tables);
+  }
+
+  const unmatched = request.tableNumbers.filter(
+    (tableNumber) => !tables.some((table) => titleNamesTable(table.tableTitle, tableNumber)),
+  );
+
+  return unmatched.length > 0
+    ? Effect.fail(
+        new TableNotFound({ catalogueNumber: request.catalogueNumber, tableNumbers: unmatched }),
+      )
+    : Effect.succeed(
+        tables.filter((table) =>
+          request.tableNumbers.some((tableNumber) =>
+            titleNamesTable(table.tableTitle, tableNumber),
+          ),
+        ),
+      );
+};
 
 /** The tables a catalogue request reads, from the latest release. */
 const catalogueTables = (
@@ -71,10 +92,54 @@ const readCatalogue = (
 ): Effect.Effect<ReadonlyArray<Observation>, ReadAbsError, HttpClient.HttpClient> =>
   catalogueTables(request).pipe(Effect.flatMap(readTables));
 
+/** The most series IDs looked up in the Time Series Directory at once. */
+const SERIES_CONCURRENCY = 4;
+
+/**
+ * The directory row a series is read from: the lowest `TableOrder` of the
+ * latest release, as `readabs` picks it, so no series appears twice.
+ */
+const seriesRow = (
+  seriesId: SeriesId,
+): Effect.Effect<
+  readonly [SeriesId, DirectoryRow | undefined],
+  HttpClientError.HttpClientError,
+  HttpClient.HttpClient
+> =>
+  fetchDirectory("sid", seriesId).pipe(
+    Effect.map((rows) => [
+      seriesId,
+      latestReleases(withTableUrl(rows)).reduce<DirectoryRow | undefined>(
+        (first, row) => (first === undefined || row.tableOrder < first.tableOrder ? row : first),
+        undefined,
+      ),
+    ]),
+  );
+
 const readSeries = (
-  _request: SeriesRequest,
+  request: SeriesRequest,
 ): Effect.Effect<ReadonlyArray<Observation>, ReadAbsError, HttpClient.HttpClient> =>
-  Effect.fail(new InvalidRequest({ message: "Series ID requests are not supported yet." }));
+  Effect.gen(function* () {
+    const found = yield* Effect.forEach(new Set(request.seriesIds), seriesRow, {
+      concurrency: SERIES_CONCURRENCY,
+    });
+
+    const missing = found.flatMap(([seriesId, row]) => (row === undefined ? [seriesId] : []));
+
+    if (missing.length > 0) {
+      return yield* new SeriesNotFound({ seriesIds: missing });
+    }
+
+    const rows = found.flatMap(([, row]) => (row === undefined ? [] : [row]));
+    const tables = tablesOf(rows);
+    const tableIds = new Map(tables.map((table) => [table.tableUrl, table.tableId]));
+    const wanted = new Set(rows.map((row) => `${tableIds.get(row.tableUrl)} ${row.seriesId}`));
+    const observations = yield* readTables(tables);
+
+    return observations.filter((observation) =>
+      wanted.has(`${observation.tableId} ${observation.seriesId}`),
+    );
+  });
 
 const read = (
   request: AbsRequest,

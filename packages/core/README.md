@@ -16,7 +16,7 @@ The library is in development. No release exists.
 
 The first release reads ABS time series by catalogue number and table number,
 or by series ID. The `readAbs` function now reads every table of a catalogue
-number. Table numbers and series IDs come next.
+number, or a list of series IDs. Table numbers come next.
 
 `readAbs` returns an `Effect` that needs an `HttpClient`. To run it without
 writing Effect code, provide the fetch-based client and call
