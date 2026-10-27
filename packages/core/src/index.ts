@@ -1,3 +1,5 @@
+export { parseTable } from "./abs/table-parse";
+
 export { readAbs, type ReadAbsError } from "./abs/time-series";
 
 export {

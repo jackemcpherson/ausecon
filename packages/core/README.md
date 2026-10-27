@@ -85,6 +85,29 @@ The read trims spaces from each catalogue number, table number, and series
 ID, and upper-cases table numbers and series IDs. A four-digit catalogue
 number such as `6345` gains `.0`.
 
+## Parse a Table You Hold
+
+`parseTable` reads the series of one ABS time series table from its `.xlsx`
+bytes, with no network. It is the parser that `readAbs` uses. Pass the bytes
+and the table, with the table ID and, if you know it, the title:
+
+```ts
+import { readFile } from "node:fs/promises";
+
+import { TableId, parseTable } from "@ausecon/core";
+import { Effect, Schema } from "effect";
+
+const bytes = new Uint8Array(await readFile("634501.xlsx"));
+
+const wages = await Effect.runPromise(
+  parseTable(bytes, { tableId: Schema.decodeSync(TableId)("634501") }),
+);
+```
+
+Each series carries the table as you passed it, so `tableTitle` is absent
+when you leave it out. A table without the ABS time series layout fails with
+`WorkbookLayoutError`.
+
 ## Errors
 
 `Effect.runPromise` rejects when the read fails. Inside Effect code, the
