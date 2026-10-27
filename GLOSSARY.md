@@ -19,8 +19,17 @@ release.
 _Avoid_: Edition, version, publication
 
 **Table**:
-One numbered time series spreadsheet within a release, such as `634501`.
+One time series spreadsheet within a release.
 _Avoid_: Workbook, file, spreadsheet
+
+**Table Number**:
+The number in the ABS title of a table, such as `1` in "Table 1. Labour force
+status".
+_Avoid_: Table index, table no
+
+**Table ID**:
+The file name of a table without its extension, such as `6202001`.
+_Avoid_: Table number, table no, table code
 
 **Series**:
 One sequence of observations of one measure at one frequency.
