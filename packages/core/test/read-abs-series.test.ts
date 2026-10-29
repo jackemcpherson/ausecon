@@ -11,7 +11,7 @@ import {
   syntheticTable,
 } from "@ausecon/testkit";
 
-import { AbsRequest, type Series, SeriesNotFound, readAbs } from "../src/index";
+import { AbsRequest, type AbsSeries, SeriesNotFound, readAbs } from "../src/index";
 
 const MODELLERS_DATABASE_RELEASE =
   "https://www.abs.gov.au/statistics/economy/national-accounts/modellers-database/latest-release/";
@@ -46,11 +46,11 @@ const sidResponse = (seriesId: string, tableUrl: string): RecordedResponse => ({
 });
 
 /** The observation count of each Series, by series ID. */
-const countBySeries = (series: ReadonlyArray<Series>) =>
+const countBySeries = (series: ReadonlyArray<AbsSeries>) =>
   Object.fromEntries(series.map(({ seriesId, observations }) => [seriesId, observations.length]));
 
 /** The distinct table IDs of the Series. */
-const tableIdsOf = (series: ReadonlyArray<Series>) =>
+const tableIdsOf = (series: ReadonlyArray<AbsSeries>) =>
   new Set(series.map(({ table }) => table.tableId));
 
 describe("readAbs for series IDs", () => {

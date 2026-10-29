@@ -1,7 +1,21 @@
 import { Effect, Option, Schema, Struct } from "effect";
-import { type CellObject, type WorkSheet, read, utils } from "xlsx";
+import { type CellObject, type WorkSheet, utils } from "xlsx";
 
-import { type AbsSeries, SeriesId, type Table, TableLayoutError } from "../types";
+import {
+  cellAt,
+  cellNumber,
+  cellText,
+  excelSerialToIsoDate,
+  openWorkbook,
+  rowsBetween,
+} from "../sheet";
+import {
+  ABS_SERIES_ID_PATTERN,
+  type AbsSeries,
+  SeriesId,
+  type Table,
+  TableLayoutError,
+} from "../types";
 
 /** Sheets that `readabs` skips by exact name. */
 const SKIPPED_SHEETS = new Set([
@@ -23,11 +37,6 @@ const SERIES_ID_ROW = 9;
 
 /** Zero-based row of the first observation: spreadsheet row 11. */
 const FIRST_OBSERVATION_ROW = 10;
-
-const MILLISECONDS_PER_DAY = 86_400_000;
-
-/** Excel serial day zero, 1899-12-30, in UTC. */
-const EXCEL_EPOCH = Date.UTC(1899, 11, 30);
 
 /** The column A labels of the metadata rows that a series carries. */
 const METADATA_LABELS = {
@@ -54,21 +63,6 @@ interface DataSheet {
   readonly periods: ReadonlyArray<readonly [number, string]>;
 }
 
-const cellAt = (sheet: WorkSheet, row: number, column: number): CellObject | undefined => {
-  const cell: CellObject | undefined = sheet[utils.encode_cell({ r: row, c: column })];
-
-  return cell;
-};
-
-const cellText = (cell: CellObject | undefined): string => String(cell?.v ?? "");
-
-const cellNumber = (cell: CellObject | undefined): number | undefined =>
-  cell?.t === "n" ? Number(cell.v) : undefined;
-
-/** Convert an Excel serial day number to an ISO `YYYY-MM-DD` date in UTC. */
-const excelSerialToIsoDate = (serial: number): string =>
-  new Date(EXCEL_EPOCH + Math.floor(serial) * MILLISECONDS_PER_DAY).toISOString().slice(0, 10);
-
 /** Whether column A text is a note that `readabs` drops, such as `Trend Break` or `see ...`. */
 const isNote = (text: string): boolean => text.includes("Trend Break") || text.includes("see");
 
@@ -79,13 +73,12 @@ const isUnexpectedRowLabel = (cell: CellObject | undefined): boolean => {
   return cell?.t !== "n" && text !== "" && !isNote(text);
 };
 
+/** An ABS series ID: a series ID that matches the ABS pattern. */
+const AbsSeriesId = SeriesId.pipe(Schema.check(Schema.isPattern(ABS_SERIES_ID_PATTERN)));
+
 /** Whether `readabs` reads a sheet as data. */
 const isDataSheet = (sheetName: string): boolean =>
   !SKIPPED_SHEETS.has(sheetName) && !TABLE_SHEET.test(sheetName);
-
-/** The zero-based rows from `first` to `last`, inclusive. */
-const rowsBetween = (first: number, last: number): ReadonlyArray<number> =>
-  Array.from({ length: last - first + 1 }, (_, index) => first + index);
 
 /**
  * Check that a sheet has the ABS time series layout.
@@ -156,7 +149,7 @@ const checkLayout = (
   });
 
   return Effect.forEach(seriesIdCells, ([column, text]) =>
-    Schema.decodeUnknownEffect(SeriesId)(text).pipe(
+    Schema.decodeUnknownEffect(AbsSeriesId)(text).pipe(
       Effect.map((seriesId) => [column, seriesId] as const),
       Effect.mapError(
         () =>
@@ -228,14 +221,15 @@ export const parseTable: (
   bytes: Uint8Array,
   table: Table,
 ) {
-  const file = yield* Effect.try({
-    try: () => read(bytes, { type: "array", cellDates: false, cellHTML: false }),
-    catch: (cause) =>
-      new TableLayoutError({
-        tableId: table.tableId,
-        reason: `The table cannot be opened as .xlsx: ${String(cause)}`,
-      }),
-  });
+  const file = yield* openWorkbook(bytes).pipe(
+    Effect.mapError(
+      (cause) =>
+        new TableLayoutError({
+          tableId: table.tableId,
+          reason: `The table cannot be opened as .xlsx: ${cause}`,
+        }),
+    ),
+  );
 
   // SheetJS adds sheets in file order, so entry order is sheet order.
   const sheets = yield* Effect.forEach(

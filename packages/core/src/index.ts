@@ -2,6 +2,8 @@ export { parseTable } from "./abs/table-parse";
 
 export { readAbs, type ReadAbsError } from "./abs/time-series";
 
+export { readRba, type ReadRbaError } from "./rba/statistical-tables";
+
 export {
   AbsRequest,
   AbsSeries,
@@ -10,6 +12,13 @@ export {
   CatalogueNumber,
   InvalidRequest,
   Observation,
+  RbaRequest,
+  RbaSeries,
+  RbaTable,
+  RbaTableLayoutError,
+  RbaTableNotFound,
+  RbaTableNumber,
+  RbaUnavailable,
   Series,
   SeriesId,
   SeriesNotFound,
