@@ -2,7 +2,8 @@
 
 `@ausecon/core` is a TypeScript library that reads Australian economic data
 from the Australian Bureau of Statistics (ABS) and the Reserve Bank of
-Australia (RBA). It ports the `readabs` and `readrba` R packages and uses
+Australia (RBA). It takes its coverage from the `readabs` and `readrba` R
+packages and uses
 [Effect](https://effect.website).
 
 The library uses no Node, Bun, or Deno APIs. It runs on Node 22.18 or later,
