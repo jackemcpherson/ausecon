@@ -6,29 +6,38 @@ import {
   type InvalidRequest,
   type RbaRequest,
   type RbaSeries,
+  RbaSeriesNotFound,
+  type RbaSeriesRequest,
   RbaTableLayoutError,
   RbaTableNotFound,
+  RbaTableNumber,
   type RbaTableRequest,
   type RbaUnavailable,
+  type SeriesId,
 } from "../types";
 import { type TableSource, readRbaTables } from "./download";
 import { decodeRbaRequest } from "./request";
-import { findTable, findUnreadableTable } from "./series-index";
+import { findSeries, findTable, findUnreadableTable } from "./series-index";
 
 /** Every error an RBA read can fail with. */
-export type ReadRbaError = InvalidRequest | RbaTableNotFound | RbaTableLayoutError | RbaUnavailable;
+export type ReadRbaError =
+  | InvalidRequest
+  | RbaSeriesNotFound
+  | RbaTableNotFound
+  | RbaTableLayoutError
+  | RbaUnavailable;
 
 /**
- * Find each requested table in the series index, before any request.
+ * Find each table in the series index, before any request.
  *
  * Fails with `RbaTableNotFound` naming every table number the index does not
  * list, then with `RbaTableLayoutError` for the first table it lists as
  * unreadable.
  */
 const locateTables = (
-  request: RbaTableRequest,
+  requested: ReadonlyArray<RbaTableNumber>,
 ): Effect.Effect<ReadonlyArray<TableSource>, RbaTableNotFound | RbaTableLayoutError> => {
-  const tableNumbers = [...new Set(request.tableNumbers)];
+  const tableNumbers = [...new Set(requested)];
 
   const missing = tableNumbers.filter(
     (tableNumber) =>
@@ -69,23 +78,81 @@ const locateTables = (
 const readTables = (
   request: RbaTableRequest,
 ): Effect.Effect<ReadonlyArray<RbaSeries>, ReadRbaError, HttpClient.HttpClient> =>
-  locateTables(request).pipe(
+  locateTables(request.tableNumbers).pipe(
     Effect.flatMap(readRbaTables),
     Effect.map((tables) => tables.flat()),
   );
 
+/**
+ * The RBA table number of the table that holds each series, from the series
+ * index. The series index is the library's own data, so its table numbers are
+ * not decoded again.
+ */
+const tablesOf = (seriesIds: ReadonlyArray<SeriesId>): ReadonlyArray<RbaTableNumber> =>
+  seriesIds.flatMap((seriesId) => {
+    const series = findSeries(seriesId);
+
+    return series === undefined
+      ? []
+      : [RbaTableNumber.make(series.tableNumber, { disableChecks: true })];
+  });
+
+const readSeries = (
+  request: RbaSeriesRequest,
+): Effect.Effect<ReadonlyArray<RbaSeries>, ReadRbaError, HttpClient.HttpClient> =>
+  Effect.gen(function* () {
+    const seriesIds = [...new Set(request.seriesIds)];
+    const unindexed = seriesIds.filter((seriesId) => findSeries(seriesId) === undefined);
+
+    if (unindexed.length > 0) {
+      return yield* new RbaSeriesNotFound({ seriesIds: unindexed });
+    }
+
+    const tables = yield* locateTables(tablesOf(seriesIds)).pipe(Effect.flatMap(readRbaTables));
+    const requested = new Set<string>(seriesIds);
+
+    const read = new Map(
+      tables
+        .flat()
+        .filter(({ seriesId }) => requested.has(seriesId))
+        .map((series) => [series.seriesId, series]),
+    );
+
+    const notHeld = seriesIds.filter((seriesId) => !read.has(seriesId));
+
+    if (notHeld.length > 0) {
+      return yield* new RbaSeriesNotFound({ seriesIds: notHeld });
+    }
+
+    return seriesIds.flatMap((seriesId) => {
+      const series = read.get(seriesId);
+
+      return series === undefined ? [] : [series];
+    });
+  });
+
 const readDecoded: (
   request: DecodedRbaRequest,
 ) => Effect.Effect<ReadonlyArray<RbaSeries>, ReadRbaError, HttpClient.HttpClient> =
-  Match.type<DecodedRbaRequest>().pipe(Match.tag("Table", readTables), Match.exhaustive);
+  Match.type<DecodedRbaRequest>().pipe(
+    Match.tag("Table", readTables),
+    Match.tag("Series", readSeries),
+    Match.exhaustive,
+  );
 
 /**
  * Read current RBA statistical tables.
  *
- * A `Table` request reads tables by RBA table number. The read finds each
- * table through the series index that ships with the library, so it makes no
- * request for a table the index does not list. It downloads each table once
- * and returns one Series per series ID: in request order, then column order.
+ * A `Table` request reads tables by RBA table number, and returns one Series
+ * per series ID: in request order, then column order. A `Series` request reads
+ * series IDs without their table numbers, and returns only the requested
+ * Series, in request order. It fails with `RbaSeriesNotFound` naming every
+ * series ID that the series index does not list, or that its table does not
+ * hold.
+ *
+ * The read finds each table through the series index that ships with the
+ * library, so it makes no request for a table or series the index does not
+ * list. It downloads each needed table once.
  *
  * The Effect requires an `HttpClient`. The library never picks one, so it runs
  * on any runtime. The client must follow redirects, or return them so that
@@ -97,6 +164,7 @@ const readDecoded: (
  * @example
  * ```typescript
  * const series = yield* readRba(RbaRequest.Table({ tableNumbers: ["F1"] }));
+ * const cashRateTarget = yield* readRba(RbaRequest.Series({ seriesIds: ["FIRMMCRTD"] }));
  * ```
  */
 export const readRba: (

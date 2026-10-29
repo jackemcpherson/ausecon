@@ -9,7 +9,13 @@ import {
   syntheticTable,
 } from "@ausecon/testkit";
 
-import { RbaRequest, RbaTableLayoutError, RbaTableNumber, readRba } from "../src/index";
+import {
+  RbaRequest,
+  RbaSeriesNotFound,
+  RbaTableLayoutError,
+  RbaTableNumber,
+  readRba,
+} from "../src/index";
 
 // Each test serves a synthetic table at the D9 table URL from the series index.
 const TABLE_URL = rbaTableUrl("D9");
@@ -221,4 +227,24 @@ describe("readRba on a synthetic table without the RBA layout", () => {
       }),
     );
   }
+});
+
+describe("readRba series IDs on a synthetic statistical table", () => {
+  it.effect("fails with RbaSeriesNotFound when the indexed table does not hold the series", () =>
+    Effect.gen(function* () {
+      const table = syntheticTable([["Data", rbaDataSheet([RATE], [[46022, 4.35]])]]);
+      const http = fixtureHttpClient(new Map([[TABLE_URL, { status: 200, body: table }]]));
+
+      // The series index lists DRDAB and DRDT in D9; this D9 holds neither.
+      const error = yield* readRba(RbaRequest.Series({ seriesIds: ["DRDAB", "drdt"] })).pipe(
+        Effect.flip,
+        Effect.provide(http.layer),
+      );
+
+      expect(error).toBeInstanceOf(RbaSeriesNotFound);
+      expect(error).toHaveProperty("seriesIds", ["DRDAB", "DRDT"]);
+      expect(error.message).toContain("The series index may be out of date");
+      expect(http.requests.map(({ url }) => url)).toEqual([TABLE_URL]);
+    }),
+  );
 });

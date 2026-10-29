@@ -3,7 +3,13 @@ import { Effect, Layer } from "effect";
 import { HttpClient, HttpClientError } from "effect/http";
 import { fixtureHttpClient, rbaTableResponses, rbaTableUrl } from "@ausecon/testkit";
 
-import { RbaRequest, RbaTableNotFound, RbaUnavailable, readRba } from "../src/index";
+import {
+  RbaRequest,
+  RbaSeriesNotFound,
+  RbaTableNotFound,
+  RbaUnavailable,
+  readRba,
+} from "../src/index";
 
 const readTables = (tableNumbers: ReadonlyArray<string>) => {
   const http = fixtureHttpClient(rbaTableResponses());
@@ -128,7 +134,95 @@ describe("readRba on recorded statistical tables", () => {
   );
 });
 
+const readSeries = (seriesIds: ReadonlyArray<string>) => {
+  const http = fixtureHttpClient(rbaTableResponses());
+
+  return readRba(RbaRequest.Series({ seriesIds })).pipe(
+    Effect.provide(http.layer),
+    Effect.map((series) => ({ series, requests: http.requests })),
+  );
+};
+
+describe("readRba on recorded series IDs", () => {
+  it.effect("reads the cash rate target from a lower-case series ID without a table number", () =>
+    Effect.gen(function* () {
+      const { series, requests } = yield* readSeries(["firmmcrtd"]);
+
+      expect(requests.map(({ url }) => url)).toEqual([rbaTableUrl("F1")]);
+      expect(series).toHaveLength(1);
+      expect(series[0]).toMatchObject({
+        publisher: "RBA",
+        seriesId: "FIRMMCRTD",
+        title: "Cash Rate Target",
+        table: { tableNumber: "F1" },
+      });
+      expect(series[0]?.observations).toHaveLength(4005);
+    }),
+  );
+
+  it.effect("reads two series from one table in request order, downloading it once", () =>
+    Effect.gen(function* () {
+      // F1 holds FIRMMCRTD before FIRMMCCRT, so request order is not column order.
+      const { series, requests } = yield* readSeries(["FIRMMCCRT", "FIRMMCRTD", "firmmccrt"]);
+
+      expect(series.map(({ seriesId }) => seriesId)).toEqual(["FIRMMCCRT", "FIRMMCRTD"]);
+      expect(requests.map(({ url }) => url)).toEqual([rbaTableUrl("F1")]);
+    }),
+  );
+
+  it.effect("reads series from several tables in request order, downloading each once", () =>
+    Effect.gen(function* () {
+      const { series, requests } = yield* readSeries(["DRDT", "FIRMMTN1", "DRDAB"]);
+
+      expect(series.map(({ seriesId }) => seriesId)).toEqual(["DRDT", "FIRMMTN1", "DRDAB"]);
+      expect(series.map(({ table }) => table.tableNumber)).toEqual(["D9", "F1.1", "D9"]);
+      expect(requests.map(({ url }) => url).toSorted()).toEqual(
+        [rbaTableUrl("D9"), rbaTableUrl("F1.1")].toSorted(),
+      );
+    }),
+  );
+});
+
 describe("readRba failures", () => {
+  const invalidSeriesRequests: ReadonlyArray<readonly [string, ReadonlyArray<string>]> = [
+    ["a malformed series ID", ["FIRM-MCRTD"]],
+    ["a series ID that starts with a digit", ["1FIRMMCRTD"]],
+    ["an empty list of series IDs", []],
+  ];
+
+  for (const [name, seriesIds] of invalidSeriesRequests) {
+    it.effect(`fails with InvalidRequest for ${name}, before any request`, () =>
+      Effect.gen(function* () {
+        const http = fixtureHttpClient(new Map());
+
+        const error = yield* readRba(RbaRequest.Series({ seriesIds })).pipe(
+          Effect.flip,
+          Effect.provide(http.layer),
+        );
+
+        expect(error._tag).toBe("InvalidRequest");
+        expect(http.requests).toEqual([]);
+      }),
+    );
+  }
+
+  it.effect("fails with RbaSeriesNotFound naming every series ID the index lacks", () =>
+    Effect.gen(function* () {
+      const http = fixtureHttpClient(rbaTableResponses());
+
+      const error = yield* readRba(
+        RbaRequest.Series({ seriesIds: ["ZZNOPE", "FIRMMCRTD", "zznope2", "ZZNOPE"] }),
+      ).pipe(Effect.flip, Effect.provide(http.layer));
+
+      expect(error).toBeInstanceOf(RbaSeriesNotFound);
+      expect(error).toHaveProperty("seriesIds", ["ZZNOPE", "ZZNOPE2"]);
+      expect(error.message).toBe(
+        "No current RBA statistical table holds the series ID ZZNOPE, ZZNOPE2. The series index may be out of date: a newer ausecon release may find it.",
+      );
+      expect(http.requests).toEqual([]);
+    }),
+  );
+
   const invalidRequests: ReadonlyArray<readonly [string, ReadonlyArray<string>]> = [
     ["a malformed RBA table number", ["F1-1"]],
     ["an ABS table number", ["Table 1"]],

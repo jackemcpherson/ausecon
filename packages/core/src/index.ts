@@ -4,6 +4,8 @@ export { readAbs, type ReadAbsError } from "./abs/time-series";
 
 export { readRba, type ReadRbaError } from "./rba/statistical-tables";
 
+export { resolveSeriesId, type Publisher, type ResolvedSeriesId } from "./series-id";
+
 export {
   AbsRequest,
   AbsSeries,
@@ -14,6 +16,7 @@ export {
   Observation,
   RbaRequest,
   RbaSeries,
+  RbaSeriesNotFound,
   RbaTable,
   RbaTableLayoutError,
   RbaTableNotFound,
