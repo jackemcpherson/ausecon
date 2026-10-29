@@ -4,6 +4,8 @@ export { readAbs, type ReadAbsError } from "./abs/time-series";
 
 export { readRba, type ReadRbaError } from "./rba/statistical-tables";
 
+export { searchSeries, type SearchSeriesOptions, type SeriesIndexEntry } from "./rba/series-search";
+
 export {
   AbsRequest,
   AbsSeries,
