@@ -84,7 +84,7 @@ RBA table number. A pipe gets CSV with these columns:
 publisher,seriesId,title,description,unit,frequency,seriesType,tableNumber,tableTitle
 ```
 
-`--format json` writes the same fields as JSON. The tool shows 20 matches.
+`--format json` writes the same fields as JSON. The tool shows up to 20 matches.
 Pass `--limit` to show more, and stderr gives the number of matches when it
 cuts the list:
 
