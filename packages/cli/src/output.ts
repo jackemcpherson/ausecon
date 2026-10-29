@@ -1,16 +1,16 @@
-import type { AbsSeries } from "@ausecon/core";
+import type { AbsSeries, RbaSeries } from "@ausecon/core";
 
-/** An output format of `ausecon abs get`. */
+/** An output format of `ausecon abs get` and `ausecon rba get`. */
 export type OutputFormat = "csv" | "json";
 
 /** The output formats, in the order help lists them. */
 export const OUTPUT_FORMATS: ReadonlyArray<OutputFormat> = ["csv", "json"];
 
 /**
- * The CSV columns: the 12 `readabs` columns in camelCase, in the v0.1.0
+ * The ABS CSV columns: the 12 `readabs` columns in camelCase, in the v0.1.0
  * order. The tool owns this list, so a change to the library cannot alter it.
  */
-const CSV_COLUMNS = [
+const ABS_COLUMNS = [
   "tableId",
   "sheet",
   "tableTitle",
@@ -25,18 +25,38 @@ const CSV_COLUMNS = [
   "unit",
 ] as const;
 
-/** The CSV columns with `--no-metadata`. */
-const CSV_COLUMNS_WITHOUT_METADATA = ["seriesId", "date", "value"] as const;
+/**
+ * The columns that fit a series from either publisher: the ABS columns that
+ * an RBA series also fills, in the ABS order.
+ */
+const SHARED_COLUMNS = [
+  "tableTitle",
+  "date",
+  "seriesDescription",
+  "value",
+  "seriesType",
+  "frequency",
+  "seriesId",
+  "unit",
+] as const;
 
-type CsvColumn = (typeof CSV_COLUMNS)[number];
+/** The RBA CSV columns: the shared columns, then the RBA metadata. */
+const RBA_COLUMNS = [...SHARED_COLUMNS, "title", "source", "publicationDate"] as const;
+
+/** The CSV columns with `--no-metadata`, for either publisher. */
+const COLUMNS_WITHOUT_METADATA = ["seriesId", "date", "value"] as const;
+
+type AbsColumn = (typeof ABS_COLUMNS)[number];
+
+type RbaColumn = (typeof RBA_COLUMNS)[number];
 
 /** One CSV row: one observation with the metadata of its series. */
-type CsvRow = Readonly<Record<CsvColumn, string | number>>;
+type CsvRow<Column extends string> = Readonly<Record<Column, string | number>>;
 
-/** Flatten Series into one row per observation. An absent table title is empty. */
-const csvRows = (series: ReadonlyArray<AbsSeries>): ReadonlyArray<CsvRow> =>
+/** Flatten ABS Series into one row per observation. An absent table title is empty. */
+const absRows = (series: ReadonlyArray<AbsSeries>): ReadonlyArray<CsvRow<AbsColumn>> =>
   series.flatMap((one) =>
-    one.observations.map(({ date, value }): CsvRow => ({
+    one.observations.map(({ date, value }): CsvRow<AbsColumn> => ({
       tableId: one.table.tableId,
       sheet: one.sheet,
       tableTitle: one.table.tableTitle ?? "",
@@ -52,6 +72,24 @@ const csvRows = (series: ReadonlyArray<AbsSeries>): ReadonlyArray<CsvRow> =>
     })),
   );
 
+/** Flatten RBA Series into one row per observation. */
+const rbaRows = (series: ReadonlyArray<RbaSeries>): ReadonlyArray<CsvRow<RbaColumn>> =>
+  series.flatMap((one) =>
+    one.observations.map(({ date, value }): CsvRow<RbaColumn> => ({
+      tableTitle: one.table.tableTitle,
+      date,
+      seriesDescription: one.description,
+      value,
+      seriesType: one.seriesType,
+      frequency: one.frequency,
+      seriesId: one.seriesId,
+      unit: one.unit,
+      title: one.title,
+      source: one.source,
+      publicationDate: one.publicationDate,
+    })),
+  );
+
 /** Quote a CSV field when it holds a comma, a quote, or a line break (RFC 4180). */
 const csvField = (value: string | number): string => {
   const text = `${value}`;
@@ -59,14 +97,20 @@ const csvField = (value: string | number): string => {
   return /[",\r\n]/u.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 };
 
-const toCsv = (columns: ReadonlyArray<CsvColumn>, rows: ReadonlyArray<CsvRow>): string =>
+const toCsv = <Column extends string>(
+  columns: ReadonlyArray<Column>,
+  rows: ReadonlyArray<CsvRow<Column>>,
+): string =>
   [
     columns.join(","),
     ...rows.map((row) => columns.map((column) => csvField(row[column])).join(",")),
   ].join("\n");
 
 /** A Series without its metadata, as `--no-metadata` writes it in JSON. */
-const withoutMetadata = ({ seriesId, observations }: AbsSeries) => ({ seriesId, observations });
+const withoutMetadata = ({ seriesId, observations }: AbsSeries | RbaSeries) => ({
+  seriesId,
+  observations,
+});
 
 /** How to render Series for stdout. */
 export interface RenderOptions {
@@ -75,8 +119,16 @@ export interface RenderOptions {
   readonly isTerminal: boolean;
 }
 
+/** Render Series as JSON: the Series list, indented only for a terminal. */
+const toJson = (series: ReadonlyArray<AbsSeries | RbaSeries>, options: RenderOptions): string =>
+  JSON.stringify(
+    options.hasMetadata ? series : series.map(withoutMetadata),
+    null,
+    options.isTerminal ? 2 : undefined,
+  );
+
 /**
- * Render Series for stdout.
+ * Render ABS Series for stdout.
  *
  * CSV has a header row and one line per observation, with `\n` line endings on
  * every platform. JSON is the Series list, indented only for a terminal.
@@ -88,11 +140,33 @@ export interface RenderOptions {
  * stdout is a terminal.
  * @returns The text to write to stdout.
  */
-export const renderSeries = (series: ReadonlyArray<AbsSeries>, options: RenderOptions): string =>
-  options.format === "csv"
-    ? toCsv(options.hasMetadata ? CSV_COLUMNS : CSV_COLUMNS_WITHOUT_METADATA, csvRows(series))
-    : JSON.stringify(
-        options.hasMetadata ? series : series.map(withoutMetadata),
-        null,
-        options.isTerminal ? 2 : undefined,
-      );
+export const renderAbsSeries = (
+  series: ReadonlyArray<AbsSeries>,
+  options: RenderOptions,
+): string =>
+  options.format === "json"
+    ? toJson(series, options)
+    : options.hasMetadata
+      ? toCsv(ABS_COLUMNS, absRows(series))
+      : toCsv(COLUMNS_WITHOUT_METADATA, absRows(series));
+
+/**
+ * Render RBA Series for stdout.
+ *
+ * CSV writes the shared columns, then `title`, `source`, and
+ * `publicationDate`. Every other rule is that of {@link renderAbsSeries}.
+ *
+ * @param series - The Series to write.
+ * @param options - The output format, whether to write metadata, and whether
+ * stdout is a terminal.
+ * @returns The text to write to stdout.
+ */
+export const renderRbaSeries = (
+  series: ReadonlyArray<RbaSeries>,
+  options: RenderOptions,
+): string =>
+  options.format === "json"
+    ? toJson(series, options)
+    : options.hasMetadata
+      ? toCsv(RBA_COLUMNS, rbaRows(series))
+      : toCsv(COLUMNS_WITHOUT_METADATA, rbaRows(series));

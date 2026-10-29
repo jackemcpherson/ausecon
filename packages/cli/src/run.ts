@@ -4,7 +4,7 @@ import { CliOutput, Command } from "effect/cli";
 import { ausecon } from "./commands/ausecon";
 import { EXIT_CODE, outcomeOf } from "./failure";
 import { helpFormatter } from "./help";
-import type { AbsReader } from "./reader";
+import type { Reader } from "./reader";
 
 /**
  * Colour is on only when stdout and stderr are terminals and `NO_COLOR` is
@@ -44,7 +44,7 @@ const holding = (console: Console.Console, held: Array<ReadonlyArray<unknown>>):
 export const runAusecon: (
   argv: ReadonlyArray<string>,
   version: string,
-) => Effect.Effect<number, never, Command.Environment | AbsReader> = Effect.fn("runAusecon")(
+) => Effect.Effect<number, never, Command.Environment | Reader> = Effect.fn("runAusecon")(
   function* (argv: ReadonlyArray<string>, version: string) {
     const formatter = helpFormatter(yield* hasColours);
     const console = yield* Console.Console;

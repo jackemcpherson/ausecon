@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { fixtureHttpClient, wagePriceIndexResponses } from "@ausecon/testkit";
 
-import { AbsReader } from "../../src/reader";
+import { Reader } from "../../src/reader";
 import { runCli } from "../run-cli";
 
 const METADATA_HEADER =
@@ -20,7 +20,7 @@ describe("ausecon abs get on the recorded Wage Price Index release", () => {
   it.effect("reads through the live reader and writes every observation as CSV", () =>
     Effect.gen(function* () {
       const http = fixtureHttpClient(wagePriceIndexResponses());
-      const reader = AbsReader.layer.pipe(Layer.provide(http.layer));
+      const reader = Reader.layer.pipe(Layer.provide(http.layer));
 
       const result = yield* runCli(["abs", "get", "--catalogue", "6345.0"], reader);
       const lines = result.stdout.split("\n");

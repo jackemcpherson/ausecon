@@ -1,7 +1,7 @@
 import { ConfigProvider, Effect, Layer, Stdio } from "effect";
 import { TestConsole } from "effect/testing";
 
-import type { AbsReader } from "../src/reader";
+import type { Reader } from "../src/reader";
 import { runAusecon } from "../src/run";
 import { CliTestLayer } from "./cli-test-layer";
 
@@ -30,7 +30,7 @@ export interface CliEnvironment {
  */
 export const runCli = (
   argv: ReadonlyArray<string>,
-  reader: Layer.Layer<AbsReader>,
+  reader: Layer.Layer<Reader>,
   environment: CliEnvironment = {},
 ): Effect.Effect<CliRun> =>
   Effect.gen(function* () {
