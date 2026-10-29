@@ -87,7 +87,7 @@ const absRows = (series: ReadonlyArray<AbsSeries>): ReadonlyArray<CsvRow<AbsColu
     })),
   );
 
-/** Flatten RBA Series into one row per observation. */
+/** Flatten RBA Series into one row per observation. An absent publication date is empty. */
 const rbaRows = (series: ReadonlyArray<RbaSeries>): ReadonlyArray<CsvRow<RbaColumn>> =>
   series.flatMap((one) =>
     one.observations.map(({ date, value }): CsvRow<RbaColumn> => ({
@@ -102,7 +102,7 @@ const rbaRows = (series: ReadonlyArray<RbaSeries>): ReadonlyArray<CsvRow<RbaColu
       unit: one.unit,
       title: one.title,
       source: one.source,
-      publicationDate: one.publicationDate,
+      publicationDate: one.publicationDate ?? "",
     })),
   );
 
