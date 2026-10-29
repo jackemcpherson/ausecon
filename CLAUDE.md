@@ -1,6 +1,8 @@
 # ausecon
 
-TypeScript port of the readabs and readrba R packages. Reference implementation
+The easiest way to work with Australian economic data: a CLI and TUI over ABS
+and RBA series. The readabs and readrba R packages set the coverage benchmark,
+not the design (ADR 0009). Reference implementation
 of Jack's TypeScript standards: follow them strictly.
 
 ## Read First

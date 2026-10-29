@@ -2,7 +2,7 @@
 
 `ausecon` is a command-line tool that reads Australian economic data from the
 Australian Bureau of Statistics (ABS) and the Reserve Bank of Australia (RBA).
-It ports the `readabs` and `readrba` R packages and uses
+It takes its coverage from the `readabs` and `readrba` R packages and uses
 [`@ausecon/core`](https://www.npmjs.com/package/@ausecon/core).
 
 ---

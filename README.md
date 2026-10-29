@@ -4,7 +4,8 @@
 Statistics (ABS) and the Reserve Bank of Australia (RBA). It provides a
 TypeScript library and a command-line tool.
 
-The project ports the `readabs` and `readrba` R packages to TypeScript.
+The `readabs` and `readrba` R packages inspired the project and set its
+coverage benchmark.
 
 ---
 
