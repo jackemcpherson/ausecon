@@ -9,13 +9,7 @@ import {
   openWorkbook,
   rowsBetween,
 } from "../sheet";
-import {
-  ABS_SERIES_ID_PATTERN,
-  type AbsSeries,
-  SeriesId,
-  type Table,
-  TableLayoutError,
-} from "../types";
+import { type AbsSeries, AbsSeriesId, type SeriesId, type Table, TableLayoutError } from "../types";
 
 /** Sheets that `readabs` skips by exact name. */
 const SKIPPED_SHEETS = new Set([
@@ -72,9 +66,6 @@ const isUnexpectedRowLabel = (cell: CellObject | undefined): boolean => {
 
   return cell?.t !== "n" && text !== "" && !isNote(text);
 };
-
-/** An ABS series ID: a series ID that matches the ABS pattern. */
-const AbsSeriesId = SeriesId.pipe(Schema.check(Schema.isPattern(ABS_SERIES_ID_PATTERN)));
 
 /** Whether `readabs` reads a sheet as data. */
 const isDataSheet = (sheetName: string): boolean =>

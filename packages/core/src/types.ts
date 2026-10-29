@@ -29,6 +29,9 @@ export const SeriesId = Schema.String.pipe(
 /** A decoded series ID. */
 export type SeriesId = typeof SeriesId.Type;
 
+/** A series ID that matches the ABS pattern, such as `A84423050A`. */
+export const AbsSeriesId = SeriesId.pipe(Schema.check(Schema.isPattern(ABS_SERIES_ID_PATTERN)));
+
 /**
  * The number in the ABS title of a table, such as `1`, `5a`, `X28`, or
  * `021_MTH`.
@@ -90,7 +93,7 @@ export type CatalogueRequest = typeof CatalogueRequest.Type;
 
 /** A decoded series ID request. */
 export const SeriesRequest = Schema.TaggedStruct("Series", {
-  seriesIds: Schema.NonEmptyArray(SeriesId),
+  seriesIds: Schema.NonEmptyArray(AbsSeriesId),
 });
 
 /** A decoded series ID request. */
