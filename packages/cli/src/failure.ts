@@ -1,5 +1,11 @@
-import type { AbsUnavailable, ReadAbsError, TableLayoutError } from "@ausecon/core";
-import { Cause, Exit, Match, Option } from "effect";
+import type {
+  AbsUnavailable,
+  RbaUnavailable,
+  ReadAbsError,
+  ReadRbaError,
+  TableLayoutError,
+} from "@ausecon/core";
+import { Cause, Exit, Match, Option, Schema } from "effect";
 import { CliError, type CliOutput } from "effect/cli";
 
 /** Exit codes of the tool. */
@@ -11,8 +17,26 @@ export const EXIT_CODE = {
   unavailable: 4,
 } as const;
 
+/**
+ * An RBA request that failed decoding. `ausecon rba get` turns the library's
+ * `InvalidRequest` into this error: `ReadAbsError` shares that tag, and the
+ * next step must name the RBA command.
+ */
+export class RbaInvalidRequest extends Schema.TaggedError<RbaInvalidRequest>()(
+  "RbaInvalidRequest",
+  { message: Schema.String },
+) {}
+
+/** The RBA read errors, as `ausecon rba get` fails with them. */
+export type RbaCommandError =
+  | Exclude<ReadRbaError, { readonly _tag: "InvalidRequest" }>
+  | RbaInvalidRequest;
+
+/** Every read error a command can fail with. */
+type ReadError = ReadAbsError | RbaCommandError;
+
 /** Every error a command can fail with. */
-export type CommandError = ReadAbsError | CliError.CliError;
+export type CommandError = ReadError | CliError.CliError;
 
 /** How a run ended: its exit code, and the message for stderr, if any. */
 export interface Outcome {
@@ -27,7 +51,11 @@ const outcome = (exitCode: number, message: string, nextStep: string): Outcome =
 
 const USAGE_HINT = "Run `ausecon abs get --help` for usage and examples.";
 
+const RBA_USAGE_HINT = "Run `ausecon rba get --help` for usage and examples.";
+
 const ISSUES = "https://github.com/jackemcpherson/ausecon/issues";
+
+const UPDATE_AUSECON = "update ausecon with `npm install --global ausecon@latest`, then try again.";
 
 /** The table, and the sheet if known, that a layout error names. */
 const layoutSubject = (error: TableLayoutError): string =>
@@ -38,18 +66,21 @@ const layoutSubject = (error: TableLayoutError): string =>
 const REPORT_IT = `Report this at ${ISSUES} with the command you ran.`;
 
 /**
- * Describe an ABS request that failed. The library words the detail, status
- * included, so the message only adds the URL. A status means the ABS
- * answered, so the next step is to wait or report moved data. No status
- * points at the network.
+ * Describe a request to a publisher that failed. The library words the detail,
+ * status included, so the message only adds the URL. A status means the
+ * publisher answered, so the next step is to wait or report moved data. No
+ * status points at the network.
  */
-const describeUnavailable = (error: AbsUnavailable): Outcome =>
+const describeUnavailable = (
+  error: AbsUnavailable | RbaUnavailable,
+  publisher: "ABS" | "RBA",
+): Outcome =>
   outcome(
     EXIT_CODE.unavailable,
     `Could not read ${error.url}: ${error.detail}`,
     error.status === undefined
-      ? "Check your network connection, then try again. The ABS website may be down."
-      : `Try again later. The ABS website may be down, or the data may have moved: if the error stays, report it at ${ISSUES}.`,
+      ? `Check your network connection, then try again. The ${publisher} website may be down.`
+      : `Try again later. The ${publisher} website may be down, or the data may have moved: if the error stays, report it at ${ISSUES}.`,
   );
 
 /** Describe a command-line usage error, or a help request, for a terminal user. */
@@ -73,9 +104,13 @@ const describeCliError = (
 
 /**
  * Describe a failed read for a terminal user. The match is exhaustive, so a new
- * `ReadAbsError` does not compile until it has an exit code and a next step.
+ * read error does not compile until it has an exit code and a next step.
+ *
+ * Each RBA failure exits with the code of its ABS counterpart. A missing RBA
+ * table can mean that the series index that ships with ausecon is out of
+ * date, so its next step is to update ausecon.
  */
-const describeReadError: (error: ReadAbsError) => Outcome = Match.type<ReadAbsError>().pipe(
+const describeReadError: (error: ReadError) => Outcome = Match.type<ReadError>().pipe(
   Match.tag("InvalidRequest", (error) => outcome(EXIT_CODE.usage, error.message, USAGE_HINT)),
   Match.tag("CatalogueNotFound", (error) =>
     outcome(
@@ -98,7 +133,7 @@ const describeReadError: (error: ReadAbsError) => Outcome = Match.type<ReadAbsEr
       "Check the series ID in the ABS table that holds it.",
     ),
   ),
-  Match.tag("AbsUnavailable", describeUnavailable),
+  Match.tag("AbsUnavailable", (error) => describeUnavailable(error, "ABS")),
   Match.tag("TimeSeriesDirectoryError", (error) =>
     outcome(
       EXIT_CODE.failure,
@@ -110,6 +145,26 @@ const describeReadError: (error: ReadAbsError) => Outcome = Match.type<ReadAbsEr
     outcome(
       EXIT_CODE.failure,
       `${layoutSubject(error)} does not have the ABS time series layout: ${error.reason}`,
+      REPORT_IT,
+    ),
+  ),
+  Match.tag("RbaInvalidRequest", (error) =>
+    outcome(EXIT_CODE.usage, error.message, RBA_USAGE_HINT),
+  ),
+  Match.tag("RbaTableNotFound", (error) =>
+    outcome(
+      EXIT_CODE.notFound,
+      error.message,
+      error.url === undefined
+        ? `Check the RBA table number on the RBA website, such as F1 for the cash rate. If it is right, ${UPDATE_AUSECON}`
+        : `The RBA may have moved the table: ${UPDATE_AUSECON}`,
+    ),
+  ),
+  Match.tag("RbaUnavailable", (error) => describeUnavailable(error, "RBA")),
+  Match.tag("RbaTableLayoutError", (error) =>
+    outcome(
+      EXIT_CODE.failure,
+      `Statistical table ${error.tableNumber} at ${error.url} does not have the RBA layout: ${error.reason}`,
       REPORT_IT,
     ),
   ),
@@ -125,8 +180,8 @@ const describeError =
 /**
  * Decide the exit code and stderr message for a finished command.
  *
- * Usage errors exit 2, missing data 3, an unavailable ABS 4, and any other
- * failure 1, including a Time Series Directory or table layout fault.
+ * Usage errors exit 2, missing data 3, an unavailable ABS or RBA 4, and any
+ * other failure 1, including a Time Series Directory or table layout fault.
  *
  * @param exit - The result of running the command.
  * @param formatter - The help formatter, used for `effect/cli` errors.

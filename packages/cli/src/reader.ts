@@ -1,24 +1,39 @@
-import { type AbsRequest, type AbsSeries, type ReadAbsError, readAbs } from "@ausecon/core";
+import {
+  type AbsRequest,
+  type AbsSeries,
+  type RbaRequest,
+  type RbaSeries,
+  type ReadAbsError,
+  type ReadRbaError,
+  readAbs,
+  readRba,
+} from "@ausecon/core";
 import { Context, Effect, Layer } from "effect";
 import type { HttpClient } from "effect/http";
 
 /**
- * Reads ABS time series for the tool.
+ * Reads series from each publisher for the tool.
  *
  * Commands read through this service, so tests can hand in Series or a chosen
- * failure without an HTTP fixture. The entry point provides `AbsReader.layer`.
+ * failure without an HTTP fixture. The entry point provides `Reader.layer`.
  */
-export class AbsReader extends Context.Service<
-  AbsReader,
+export class Reader extends Context.Service<
+  Reader,
   {
-    readonly read: (request: AbsRequest) => Effect.Effect<ReadonlyArray<AbsSeries>, ReadAbsError>;
+    readonly readAbs: (
+      request: AbsRequest,
+    ) => Effect.Effect<ReadonlyArray<AbsSeries>, ReadAbsError>;
+    readonly readRba: (
+      request: RbaRequest,
+    ) => Effect.Effect<ReadonlyArray<RbaSeries>, ReadRbaError>;
   }
->()("ausecon/AbsReader") {
-  /** The live reader: `readAbs` over the `HttpClient` in context. */
-  static readonly layer: Layer.Layer<AbsReader, never, HttpClient.HttpClient> = Layer.effect(
-    AbsReader,
+>()("ausecon/Reader") {
+  /** The live reader: `readAbs` and `readRba` over the `HttpClient` in context. */
+  static readonly layer: Layer.Layer<Reader, never, HttpClient.HttpClient> = Layer.effect(
+    Reader,
     Effect.map(Effect.context<HttpClient.HttpClient>(), (context) => ({
-      read: (request: AbsRequest) => readAbs(request).pipe(Effect.provideContext(context)),
+      readAbs: (request: AbsRequest) => readAbs(request).pipe(Effect.provideContext(context)),
+      readRba: (request: RbaRequest) => readRba(request).pipe(Effect.provideContext(context)),
     })),
   );
 }

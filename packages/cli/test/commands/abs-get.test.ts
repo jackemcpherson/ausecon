@@ -63,7 +63,7 @@ const ISSUES = "https://github.com/jackemcpherson/ausecon/issues";
 
 const ANSI_ESCAPE = "\u001B[";
 
-const reading = (series: ReadonlyArray<AbsSeries>) => fakeReader(Effect.succeed(series));
+const reading = (series: ReadonlyArray<AbsSeries>) => fakeReader({ abs: Effect.succeed(series) });
 
 describe("ausecon abs get output", () => {
   it.effect("writes one CSV row per observation with a header row by default", () =>
@@ -433,7 +433,7 @@ describe("ausecon abs get read failures", () => {
       Effect.gen(function* () {
         const result = yield* runCli(
           ["abs", "get", "--catalogue", "6345.0"],
-          fakeReader(Effect.fail(error)).layer,
+          fakeReader({ abs: Effect.fail(error) }).layer,
         );
 
         expect(result.exitCode).toBe(exitCode);
@@ -446,7 +446,7 @@ describe("ausecon abs get read failures", () => {
     Effect.gen(function* () {
       const result = yield* runCli(
         ["abs", "get", "--catalogue", "6345.0"],
-        fakeReader(Effect.die("boom")).layer,
+        fakeReader({ abs: Effect.die("boom") }).layer,
       );
 
       expect(result.exitCode).toBe(1);

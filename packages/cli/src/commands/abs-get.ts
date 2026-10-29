@@ -2,8 +2,9 @@ import { AbsRequest } from "@ausecon/core";
 import { Console, Effect, Option, Stdio } from "effect";
 import { CliError, Command, Flag } from "effect/cli";
 
-import { OUTPUT_FORMATS, renderSeries } from "../output";
-import { AbsReader } from "../reader";
+import { renderAbsSeries } from "../output";
+import { Reader } from "../reader";
+import { outputFlags } from "./output-flags";
 
 const flags = {
   catalogue: Flag.String("catalogue").pipe(
@@ -18,18 +19,7 @@ const flags = {
     Flag.withDescription("Series ID to read, such as A2603039T. Repeat for more series."),
     Flag.atLeast(0),
   ),
-  format: Flag.Literals("format", OUTPUT_FORMATS).pipe(
-    Flag.withDescription("Output format: csv or json."),
-    Flag.withDefault("csv"),
-  ),
-  hasMetadata: Flag.Boolean("no-metadata").pipe(
-    Flag.withDescription(
-      "Leave out the metadata: write series ID, date, and value as CSV, or series ID and observations as JSON.",
-    ),
-    Flag.withoutNegation,
-    Flag.withDefault(false),
-    Flag.map((hasNoMetadata) => !hasNoMetadata),
-  ),
+  ...outputFlags,
 };
 
 /** The parsed flags of `ausecon abs get`. */
@@ -61,10 +51,10 @@ const requestOf = (input: GetInput): Effect.Effect<AbsRequest, CliError.Validati
 const get = Effect.fn("absGet")(function* (input: GetInput) {
   const request = yield* requestOf(input);
   const isTerminal = yield* (yield* Stdio.Stdio).stdoutIsTerminal;
-  const series = yield* (yield* AbsReader).read(request);
+  const series = yield* (yield* Reader).readAbs(request);
 
   yield* Console.log(
-    renderSeries(series, { format: input.format, hasMetadata: input.hasMetadata, isTerminal }),
+    renderAbsSeries(series, { format: input.format, hasMetadata: input.hasMetadata, isTerminal }),
   );
 });
 
