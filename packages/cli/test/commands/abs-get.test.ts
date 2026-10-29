@@ -1,11 +1,11 @@
 import {
   AbsRequest,
+  AbsSeries,
   AbsUnavailable,
   CatalogueNotFound,
   CatalogueNumber,
   InvalidRequest,
   type ReadAbsError,
-  Series,
   SeriesId,
   SeriesNotFound,
   TableId,
@@ -24,9 +24,10 @@ const TABLE_1_TITLE =
   "Table 1. Total Hourly Rates of Pay Excluding Bonuses: Sector, Original, Seasonally Adjusted and Trend";
 
 /** A Series with a table title that holds commas, as the Time Series Directory names it. */
-const WAGES = Schema.decodeSync(Series)({
+const WAGES = Schema.decodeSync(AbsSeries)({
+  publisher: "ABS",
   seriesId: "A2603039T",
-  seriesDescription: "Quarterly Index ;  Total hourly rates of pay excluding bonuses ;",
+  description: "Quarterly Index ;  Total hourly rates of pay excluding bonuses ;",
   unit: "Index Numbers",
   seriesType: "Original",
   dataType: "INDEX",
@@ -41,9 +42,10 @@ const WAGES = Schema.decodeSync(Series)({
 });
 
 /** A Series from a table with no title, as the public parser can return it. */
-const LOCAL = Schema.decodeSync(Series)({
+const LOCAL = Schema.decodeSync(AbsSeries)({
+  publisher: "ABS",
   seriesId: "A1000001A",
-  seriesDescription: "Employed persons ;",
+  description: "Employed persons ;",
   unit: "000",
   seriesType: "Trend",
   dataType: "STOCK",
@@ -61,7 +63,7 @@ const ISSUES = "https://github.com/jackemcpherson/ausecon/issues";
 
 const ANSI_ESCAPE = "\u001B[";
 
-const reading = (series: ReadonlyArray<Series>) => fakeReader(Effect.succeed(series));
+const reading = (series: ReadonlyArray<AbsSeries>) => fakeReader(Effect.succeed(series));
 
 describe("ausecon abs get output", () => {
   it.effect("writes one CSV row per observation with a header row by default", () =>
@@ -93,7 +95,7 @@ describe("ausecon abs get output", () => {
 
   it.effect("quotes a CSV field that holds a quote or a line break", () =>
     Effect.gen(function* () {
-      const awkward = { ...LOCAL, seriesDescription: 'First "line" ;\nsecond line ;' };
+      const awkward = { ...LOCAL, description: 'First "line" ;\nsecond line ;' };
 
       const result = yield* runCli(
         ["abs", "get", "--catalogue", "6202.0"],
@@ -115,8 +117,8 @@ describe("ausecon abs get output", () => {
         const result = yield* runCli(
           ["abs", "get", "--catalogue", "6202.0"],
           reading([
-            { ...LOCAL, seriesDescription: "first\nsecond" },
-            { ...LOCAL, seriesDescription: "first\rsecond" },
+            { ...LOCAL, description: "first\nsecond" },
+            { ...LOCAL, description: "first\rsecond" },
           ]).layer,
         );
 
@@ -173,7 +175,7 @@ describe("ausecon abs get output", () => {
 
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toMatch(
-        /^\[\n {2}\{\n {4}"seriesId": "A2603039T",\n {4}"seriesDescription"/u,
+        /^\[\n {2}\{\n {4}"publisher": "ABS",\n {4}"seriesId": "A2603039T",\n {4}"description"/u,
       );
       expect(series).toEqual([WAGES]);
     }),

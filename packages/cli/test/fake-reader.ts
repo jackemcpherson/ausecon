@@ -1,4 +1,4 @@
-import type { AbsRequest, ReadAbsError, Series } from "@ausecon/core";
+import type { AbsRequest, AbsSeries, ReadAbsError } from "@ausecon/core";
 import { Effect, Layer } from "effect";
 
 import { AbsReader } from "../src/reader";
@@ -16,7 +16,7 @@ export interface FakeReader {
  * @returns The layer and its request log.
  */
 export const fakeReader = (
-  result: Effect.Effect<ReadonlyArray<Series>, ReadAbsError>,
+  result: Effect.Effect<ReadonlyArray<AbsSeries>, ReadAbsError>,
 ): FakeReader => {
   const requests: Array<AbsRequest> = [];
 

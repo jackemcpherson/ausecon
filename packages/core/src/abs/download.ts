@@ -1,7 +1,12 @@
 import { Effect } from "effect";
 import type { HttpClient } from "effect/http";
 
-import type { AbsUnavailable, Series, TableLayoutError, TimeSeriesDirectoryError } from "../types";
+import type {
+  AbsSeries,
+  AbsUnavailable,
+  TableLayoutError,
+  TimeSeriesDirectoryError,
+} from "../types";
 import { ABS_CONCURRENCY, fetchBytes } from "./http";
 import { parseTable } from "./table-parse";
 import type { Tables } from "./time-series-directory";
@@ -9,7 +14,7 @@ import type { Tables } from "./time-series-directory";
 /** The Series of one downloaded table, and the table URL it came from. */
 export interface TableSeries {
   readonly tableUrl: string;
-  readonly series: ReadonlyArray<Series>;
+  readonly series: ReadonlyArray<AbsSeries>;
 }
 
 /**

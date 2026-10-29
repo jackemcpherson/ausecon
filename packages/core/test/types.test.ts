@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Schema } from "effect";
 
-import { CatalogueNumber, SeriesId, TableNumber } from "../src/types";
+import { AbsSeries, CatalogueNumber, Series, SeriesId, TableNumber } from "../src/types";
 
 describe("CatalogueNumber", () => {
   it("accepts a release catalogue number", () => {
@@ -50,5 +50,47 @@ describe("TableNumber", () => {
 
   it("rejects a table title", () => {
     expect(Schema.is(TableNumber)("Table 1")).toBe(false);
+  });
+});
+
+describe("Series", () => {
+  const ABS_SERIES = {
+    publisher: "ABS",
+    seriesId: "A84423050A",
+    description: "Employed total ;  Persons ;",
+    unit: "000",
+    seriesType: "Seasonally Adjusted",
+    dataType: "STOCK",
+    frequency: "Month",
+    collectionMonth: "1",
+    table: { tableId: "6202001" },
+    sheet: "Data1",
+    observations: [{ date: "2026-09-01", value: 14_600.1 }],
+  };
+
+  it("keeps the shared fields and the ABS fields on AbsSeries", () => {
+    expect(Object.keys(AbsSeries.fields)).toEqual([
+      "publisher",
+      "seriesId",
+      "description",
+      "unit",
+      "seriesType",
+      "dataType",
+      "frequency",
+      "collectionMonth",
+      "table",
+      "sheet",
+      "observations",
+    ]);
+  });
+
+  it("accepts an ABS series", () => {
+    expect(Schema.is(Series)(ABS_SERIES)).toBe(true);
+  });
+
+  it("rejects a series without a publisher", () => {
+    const { publisher: _publisher, ...untagged } = ABS_SERIES;
+
+    expect(Schema.is(Series)(untagged)).toBe(false);
   });
 });

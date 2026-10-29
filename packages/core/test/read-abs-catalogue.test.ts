@@ -34,8 +34,9 @@ describe("readAbs for every table of a catalogue number", () => {
 
       // Checked by hand against cells A11 to A13, B1 to B13 of 634501.xlsx sheet Data1.
       expect(privateSector).toMatchObject({
+        publisher: "ABS",
         seriesId: "A2603039T",
-        seriesDescription: PRIVATE_SECTOR_DESCRIPTION,
+        description: PRIVATE_SECTOR_DESCRIPTION,
         unit: "Index Numbers",
         seriesType: "Original",
         dataType: "INDEX",
@@ -45,8 +46,9 @@ describe("readAbs for every table of a catalogue number", () => {
         sheet: "Data1",
       });
       expect(Object.keys(privateSector ?? {})).toEqual([
+        "publisher",
         "seriesId",
-        "seriesDescription",
+        "description",
         "unit",
         "seriesType",
         "dataType",
@@ -125,8 +127,8 @@ describe("readAbs for every table of a catalogue number", () => {
       );
 
       const privateSector = series.filter(
-        ({ table, seriesDescription }) =>
-          table.tableId === "634501" && seriesDescription === PRIVATE_SECTOR_DESCRIPTION,
+        ({ table, description }) =>
+          table.tableId === "634501" && description === PRIVATE_SECTOR_DESCRIPTION,
       );
 
       expect(privateSector.map(({ seriesId, seriesType }) => [seriesId, seriesType])).toEqual(

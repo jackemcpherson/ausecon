@@ -123,14 +123,15 @@ export const Observation = Schema.Struct({
 export type Observation = typeof Observation.Type;
 
 /**
- * One sequence of observations of one measure, read from one sheet of a table.
+ * One ABS series, read from one sheet of a table.
  *
  * The metadata fields come from the rows above the observations. The
  * observations come in row order.
  */
-export const Series = Schema.Struct({
+export const AbsSeries = Schema.Struct({
+  publisher: Schema.Literal("ABS"),
   seriesId: SeriesId,
-  seriesDescription: Schema.String,
+  description: Schema.String,
   unit: Schema.String,
   seriesType: Schema.String,
   dataType: Schema.String,
@@ -141,7 +142,19 @@ export const Series = Schema.Struct({
   observations: Schema.Array(Observation),
 });
 
-/** One sequence of observations of one measure, read from one sheet of a table. */
+/** One ABS series, read from one sheet of a table. */
+export type AbsSeries = typeof AbsSeries.Type;
+
+/**
+ * One sequence of observations of one measure, tagged by its publisher.
+ *
+ * Every member carries `seriesId`, `description`, `unit`, `seriesType`,
+ * `frequency`, `table`, and `observations`. Each publisher adds its own
+ * fields.
+ */
+export const Series = Schema.Union([AbsSeries]);
+
+/** One sequence of observations of one measure, tagged by its publisher. */
 export type Series = typeof Series.Type;
 
 /**

@@ -4,6 +4,7 @@ export { readAbs, type ReadAbsError } from "./abs/time-series";
 
 export {
   AbsRequest,
+  AbsSeries,
   AbsUnavailable,
   CatalogueNotFound,
   CatalogueNumber,

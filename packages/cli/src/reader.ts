@@ -1,4 +1,4 @@
-import { type AbsRequest, type ReadAbsError, type Series, readAbs } from "@ausecon/core";
+import { type AbsRequest, type AbsSeries, type ReadAbsError, readAbs } from "@ausecon/core";
 import { Context, Effect, Layer } from "effect";
 import type { HttpClient } from "effect/http";
 
@@ -11,7 +11,7 @@ import type { HttpClient } from "effect/http";
 export class AbsReader extends Context.Service<
   AbsReader,
   {
-    readonly read: (request: AbsRequest) => Effect.Effect<ReadonlyArray<Series>, ReadAbsError>;
+    readonly read: (request: AbsRequest) => Effect.Effect<ReadonlyArray<AbsSeries>, ReadAbsError>;
   }
 >()("ausecon/AbsReader") {
   /** The live reader: `readAbs` over the `HttpClient` in context. */
