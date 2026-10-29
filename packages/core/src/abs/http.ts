@@ -1,18 +1,8 @@
-import { Effect, Match, Predicate } from "effect";
-import {
-  HttpClient,
-  type HttpClientError,
-  HttpClientRequest,
-  type HttpClientResponse,
-} from "effect/http";
+import { Effect, Match } from "effect";
+import type { HttpClient, HttpClientError } from "effect/http";
 
+import { bytesBody, fetchBody, reasonMessage } from "../http";
 import { AbsUnavailable, TimeSeriesDirectoryError } from "../types";
-
-/**
- * The User-Agent sent with every request. The ABS answers 403 to a request
- * without one.
- */
-export const USER_AGENT = "ausecon (+https://github.com/jackemcpherson/ausecon)";
 
 /**
  * The most concurrent requests each stage of a read sends to the ABS: the
@@ -21,29 +11,6 @@ export const USER_AGENT = "ausecon (+https://github.com/jackemcpherson/ausecon)"
  * so lookups and their pages can send up to this limit squared.
  */
 export const ABS_CONCURRENCY = 4;
-
-/**
- * Describe the error under a failed request: the error description, or the
- * message of the underlying error. `fetch` in Node nests the network error one
- * level down, so its own message is only "fetch failed": the nested message
- * follows it.
- */
-const reasonMessage = (
-  reason: HttpClientError.HttpClientError["reason"],
-  fallback: string,
-): string => {
-  if (reason.description !== undefined) {
-    return reason.description;
-  }
-
-  const { cause } = reason;
-
-  const messages = [cause, Predicate.isError(cause) ? cause.cause : undefined].flatMap((error) =>
-    Predicate.isError(error) && error.message !== "" ? [error.message] : [],
-  );
-
-  return messages.length === 0 ? fallback : messages.join(": ");
-};
 
 /**
  * Turn an Effect HTTP client error into the library's own failure, so that no
@@ -91,32 +58,6 @@ const requestFailure = (
   );
 
 /**
- * Send a GET request to the ABS with the caller's `HttpClient` and read the
- * body.
- *
- * The request sends the project User-Agent, follows redirects that the
- * underlying client returns, and fails on any status outside 2xx.
- */
-const fetchBody = <A>(
-  url: string,
-  body: (
-    response: HttpClientResponse.HttpClientResponse,
-  ) => Effect.Effect<A, HttpClientError.HttpClientError>,
-): Effect.Effect<A, AbsUnavailable | TimeSeriesDirectoryError, HttpClient.HttpClient> =>
-  Effect.gen(function* () {
-    const client = (yield* HttpClient.HttpClient).pipe(
-      HttpClient.mapRequest(HttpClientRequest.setHeader("user-agent", USER_AGENT)),
-      HttpClient.followRedirects(),
-      HttpClient.filterStatusOk,
-    );
-
-    return yield* client.get(url).pipe(
-      Effect.flatMap(body),
-      Effect.mapError((error) => requestFailure(url, error)),
-    );
-  });
-
-/**
  * Fetch an ABS URL as text.
  *
  * @param url - The full request URL.
@@ -128,7 +69,11 @@ export const fetchText: (
   url: string,
 ) => Effect.Effect<string, AbsUnavailable | TimeSeriesDirectoryError, HttpClient.HttpClient> =
   Effect.fn("fetchText")(function* (url: string) {
-    return yield* fetchBody(url, (response) => response.text);
+    return yield* fetchBody(
+      url,
+      (response) => response.text,
+      (error) => requestFailure(url, error),
+    );
   });
 
 /**
@@ -146,7 +91,5 @@ export const fetchBytes: (
   AbsUnavailable | TimeSeriesDirectoryError,
   HttpClient.HttpClient
 > = Effect.fn("fetchBytes")(function* (url: string) {
-  return yield* fetchBody(url, (response) =>
-    Effect.map(response.arrayBuffer, (body) => new Uint8Array(body)),
-  );
+  return yield* fetchBody(url, bytesBody, (error) => requestFailure(url, error));
 });

@@ -12,10 +12,14 @@ export {
   wagePriceIndexResponses,
 } from "./fixture-http-client";
 
+export { RBA_TABLES, RBA_TABLE_FILES, rbaTableResponses, rbaTableUrl } from "./rba-fixtures";
+
 export {
   type SyntheticCell,
+  type SyntheticRbaSeries,
   type SyntheticRows,
   type SyntheticSeries,
   absDataSheet,
+  rbaDataSheet,
   syntheticTable,
 } from "./synthetic-table";
