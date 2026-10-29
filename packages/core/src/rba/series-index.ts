@@ -35,7 +35,9 @@ export interface IndexedSeries {
  * the table that holds it (ADR 0010).
  *
  * `tables` and `series` hold the readable tables, in tables page order, and
- * their series, in table order, then column order. `unreadableTables` holds
+ * their series, in table order, then sheet and column order. A series ID can
+ * appear more than once: the RBA repeats some within a table and across
+ * tables. `unreadableTables` holds
  * the tables that failed to parse, with the reason.
  */
 export interface SeriesIndex {

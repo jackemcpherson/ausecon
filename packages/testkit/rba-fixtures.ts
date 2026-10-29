@@ -1,5 +1,15 @@
 import { type RecordedResponse, recorded } from "./fixture-http-client";
 
+/** The RBA page that lists every current statistical table. */
+export const RBA_TABLES_PAGE = "https://www.rba.gov.au/statistics/tables/";
+
+/**
+ * The tables page, recorded on 29 October 2026 and trimmed to the entries for
+ * D9, E3, F1, F1.1, and F3. The F3 entry also links to a PDF. The page keeps
+ * its real markup around the entries.
+ */
+export const RBA_TABLES_PAGE_FILE = "rba-tables.trimmed.html";
+
 /** The folder of current statistical table spreadsheets on the RBA site. */
 export const RBA_TABLES = "https://www.rba.gov.au/statistics/tables/xls/";
 
