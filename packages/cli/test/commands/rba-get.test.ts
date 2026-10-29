@@ -2,11 +2,13 @@ import {
   InvalidRequest,
   RbaRequest,
   RbaSeries,
+  RbaSeriesNotFound,
   RbaTableLayoutError,
   RbaTableNotFound,
   RbaTableNumber,
   RbaUnavailable,
   type ReadRbaError,
+  SeriesId,
 } from "@ausecon/core";
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
@@ -55,6 +57,8 @@ const ISSUES = "https://github.com/jackemcpherson/ausecon/issues";
 const reading = (series: ReadonlyArray<RbaSeries>) => fakeReader({ rba: Effect.succeed(series) });
 
 const tableNumber = Schema.decodeSync(RbaTableNumber);
+
+const seriesId = Schema.decodeSync(SeriesId);
 
 describe("ausecon rba get output", () => {
   it.effect(
@@ -243,6 +247,15 @@ describe("ausecon rba get read failures", () => {
         `ausecon: The RBA answered 404 for table F1 at ${TABLE_URL}. ` +
         "The series index may be out of date: a newer ausecon release may find it.\n" +
         `The RBA may have moved the table: ${UPDATE_AUSECON}`,
+    },
+    {
+      name: "RbaSeriesNotFound",
+      error: new RbaSeriesNotFound({ seriesIds: [seriesId("FIRMMCRTX")] }),
+      exitCode: 3,
+      stderr:
+        "ausecon: No current RBA statistical table holds the series ID FIRMMCRTX. " +
+        "The series index may be out of date: a newer ausecon release may find it.\n" +
+        `Find the series ID with \`ausecon search <word>\`. If it is right, ${UPDATE_AUSECON}`,
     },
     {
       name: "RbaUnavailable with a status",

@@ -65,8 +65,8 @@ type RbaColumn = (typeof RBA_COLUMNS)[number];
 
 type SeriesColumn = (typeof SERIES_COLUMNS)[number];
 
-/** One CSV row: one observation with the metadata of its series. */
-type CsvRow<Column extends string> = Readonly<Record<Column, string | number>>;
+/** One CSV row, such as one observation with the metadata of its series. */
+export type CsvRow<Column extends string> = Readonly<Record<Column, string | number>>;
 
 /** Flatten ABS Series into one row per observation. An absent table title is empty. */
 const absRows = (series: ReadonlyArray<AbsSeries>): ReadonlyArray<CsvRow<AbsColumn>> =>
@@ -138,7 +138,8 @@ const csvField = (value: string | number): string => {
   return /[",\r\n]/u.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 };
 
-const toCsv = <Column extends string>(
+/** Write CSV: a header row of the columns, then one line per row, with `\n` line endings. */
+export const toCsv = <Column extends string>(
   columns: ReadonlyArray<Column>,
   rows: ReadonlyArray<CsvRow<Column>>,
 ): string =>

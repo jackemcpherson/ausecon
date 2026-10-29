@@ -1,9 +1,9 @@
-import { ConfigProvider, Effect, Layer, Stdio } from "effect";
+import { ConfigProvider, Effect, Layer, Stdio, Terminal } from "effect";
 import { TestConsole } from "effect/testing";
 
 import type { Reader } from "../src/reader";
 import { runAusecon } from "../src/run";
-import { CliTestLayer } from "./cli-test-layer";
+import { CliTestLayer, testTerminal } from "./cli-test-layer";
 
 /** What one in-process run of the tool printed, and its exit code. */
 export interface CliRun {
@@ -16,6 +16,7 @@ export interface CliRun {
 export interface CliEnvironment {
   readonly isTerminal?: boolean;
   readonly env?: Readonly<Record<string, string>>;
+  readonly columns?: number;
 }
 
 /**
@@ -23,9 +24,9 @@ export interface CliEnvironment {
  *
  * @param argv - The arguments after `ausecon`.
  * @param reader - The reader layer that answers the read.
- * @param environment - Whether stdout and stderr are terminals, and the
- * environment variables. Neither is a terminal by default, and no variable is
- * set.
+ * @param environment - Whether stdout and stderr are terminals, the
+ * environment variables, and the terminal width. Neither is a terminal by
+ * default, no variable is set, and the terminal is 80 columns wide.
  * @returns An Effect that yields stdout, stderr, and the exit code.
  */
 export const runCli = (
@@ -40,7 +41,7 @@ export const runCli = (
 
     return { stdout: stdout.join("\n"), stderr: stderr.join("\n"), exitCode };
   }).pipe(
-    // The inner layers replace the `Stdio` service of `CliTestLayer`.
+    // The inner layers replace the `Stdio` and `Terminal` services of `CliTestLayer`.
     Effect.provide(
       Layer.mergeAll(
         reader,
@@ -49,6 +50,7 @@ export const runCli = (
           stderrIsTerminal: Effect.succeed(environment.isTerminal ?? false),
         }),
         ConfigProvider.layer(ConfigProvider.fromEnvRecord(environment.env ?? {})),
+        Layer.succeed(Terminal.Terminal, testTerminal(environment.columns ?? 80)),
       ),
     ),
     Effect.provide(CliTestLayer),
