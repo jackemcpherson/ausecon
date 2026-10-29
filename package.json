@@ -7,10 +7,11 @@
   "type": "module",
   "scripts": {
     "check": "vp check",
-    "typecheck": "tsc -p packages/core && tsc -p packages/core/test && tsc -p packages/cli && tsc -p packages/testkit && tsc -p tsconfig.node.json",
+    "typecheck": "tsc -p packages/core && tsc -p packages/core/test && tsc -p packages/cli && tsc -p packages/testkit && tsc -p packages/rba-index && tsc -p tsconfig.node.json",
     "test": "vp test",
     "build": "vp run -r build",
-    "docs:check": "rumdl check --deny-config-warnings . && vale --no-global ."
+    "docs:check": "rumdl check --deny-config-warnings . && vale --no-global .",
+    "rba:index": "bun packages/rba-index/main.ts"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",

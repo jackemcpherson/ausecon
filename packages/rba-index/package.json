@@ -1,0 +1,14 @@
+{
+  "name": "@ausecon/rba-index",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Builds the RBA series index that ships in @ausecon/core (ADR 0010). Never published.",
+  "type": "module",
+  "dependencies": {
+    "effect": "4.0.6",
+    "node-html-parser": "9.0.4"
+  },
+  "devDependencies": {
+    "@ausecon/testkit": "workspace:*"
+  }
+}

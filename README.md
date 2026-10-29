@@ -11,9 +11,11 @@ coverage benchmark.
 
 ## Status
 
-Version 0.2.0 reads ABS time series by catalogue number and table number, or
-by series ID, and parses ABS tables you already hold. RBA data comes in a
-later release.
+Version 0.3.0 reads ABS time series by catalogue number and table number,
+and current RBA statistical tables by RBA table number. It reads series IDs
+from both publishers in one call, and searches a series index of RBA series
+offline. Source: Reserve Bank of Australia. The RBA does not endorse this
+project.
 
 - [`@ausecon/core`](packages/core/README.md): the TypeScript library.
 - [`ausecon`](packages/cli/README.md): the command-line tool.

@@ -111,7 +111,8 @@ export default defineConfig({
     tabWidth: 2,
     printWidth: 100,
     // rumdl owns Markdown formatting, and the Vale styles are copied from the house precedent.
-    ignorePatterns: [...IGNORED, "**/*.md", "styles/**"],
+    // Fixtures are recordings and stay byte for byte as the publisher served them.
+    ignorePatterns: [...IGNORED, "**/*.md", "styles/**", "packages/testkit/fixtures/**"],
   },
   test: {
     coverage: {

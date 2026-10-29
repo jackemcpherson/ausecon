@@ -13,9 +13,20 @@ export {
 } from "./fixture-http-client";
 
 export {
+  RBA_TABLES,
+  RBA_TABLES_PAGE,
+  RBA_TABLES_PAGE_FILE,
+  RBA_TABLE_FILES,
+  rbaTableResponses,
+  rbaTableUrl,
+} from "./rba-fixtures";
+
+export {
   type SyntheticCell,
+  type SyntheticRbaSeries,
   type SyntheticRows,
   type SyntheticSeries,
   absDataSheet,
+  rbaDataSheet,
   syntheticTable,
 } from "./synthetic-table";

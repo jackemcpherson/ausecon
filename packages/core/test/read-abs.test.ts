@@ -36,6 +36,7 @@ describe("readAbs request input", () => {
       AbsRequest.Catalogue({ catalogueNumber: "6345.0", tableNumbers: ["Table 1"] }),
     ],
     ["a malformed series ID", AbsRequest.Series({ seriesIds: ["A26-03039T"] })],
+    ["an RBA series ID", AbsRequest.Series({ seriesIds: ["FIRMMCRTD"] })],
     ["an empty list of series IDs", AbsRequest.Series({ seriesIds: [] })],
   ];
 

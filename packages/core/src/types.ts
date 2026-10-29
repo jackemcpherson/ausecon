@@ -12,15 +12,25 @@ export const CatalogueNumber = Schema.String.pipe(
 export type CatalogueNumber = typeof CatalogueNumber.Type;
 
 /**
- * An ABS series ID, such as `A84423050A`.
+ * The pattern of every ABS series ID, such as `A84423050A`. No RBA series ID
+ * matches it.
+ */
+export const ABS_SERIES_ID_PATTERN = /^[A-Z]\d+[A-Z]$/;
+
+/**
+ * A series ID of either publisher, such as `A84423050A` (ABS) or `FIRMMCRTD`
+ * (RBA): an upper-case letter, then upper-case letters and digits.
  */
 export const SeriesId = Schema.String.pipe(
-  Schema.check(Schema.isPattern(/^[A-Z]\d+[A-Z]$/)),
+  Schema.check(Schema.isPattern(/^[A-Z][A-Z0-9]+$/)),
   Schema.brand("SeriesId"),
 );
 
-/** A decoded ABS series ID. */
+/** A decoded series ID. */
 export type SeriesId = typeof SeriesId.Type;
+
+/** A series ID that matches the ABS pattern, such as `A84423050A`. */
+export const AbsSeriesId = SeriesId.pipe(Schema.check(Schema.isPattern(ABS_SERIES_ID_PATTERN)));
 
 /**
  * The number in the ABS title of a table, such as `1`, `5a`, `X28`, or
@@ -83,7 +93,7 @@ export type CatalogueRequest = typeof CatalogueRequest.Type;
 
 /** A decoded series ID request. */
 export const SeriesRequest = Schema.TaggedStruct("Series", {
-  seriesIds: Schema.NonEmptyArray(SeriesId),
+  seriesIds: Schema.NonEmptyArray(AbsSeriesId),
 });
 
 /** A decoded series ID request. */
@@ -94,6 +104,68 @@ export const DecodedAbsRequest = Schema.Union([CatalogueRequest, SeriesRequest])
 
 /** A decoded {@link AbsRequest}. */
 export type DecodedAbsRequest = typeof DecodedAbsRequest.Type;
+
+/**
+ * An RBA table number: the identifier in the title of a statistical table,
+ * such as `A2`, `F1.1`, `F11.1`, or `B13.2.1`.
+ */
+export const RbaTableNumber = Schema.String.pipe(
+  Schema.check(Schema.isPattern(/^[A-Z]\d{1,2}(?:\.\d{1,2}){0,2}$/)),
+  Schema.brand("RbaTableNumber"),
+);
+
+/** A decoded RBA table number. */
+export type RbaTableNumber = typeof RbaTableNumber.Type;
+
+/**
+ * A request to read RBA statistical tables, as the caller writes it.
+ *
+ * The `Table` variant reads current tables by RBA table number. The `Series`
+ * variant reads one or more series IDs, without their table numbers. The read
+ * upper-cases and decodes both, so `f1.1` finds F1.1 and `firmmcrtd` finds
+ * FIRMMCRTD.
+ */
+export type RbaRequest = Data.TaggedEnum<{
+  Table: {
+    readonly tableNumbers: ReadonlyArray<string>;
+  };
+  Series: {
+    readonly seriesIds: ReadonlyArray<string>;
+  };
+}>;
+
+/**
+ * Constructors for {@link RbaRequest}.
+ *
+ * @example
+ * ```typescript
+ * const cashRate = RbaRequest.Table({ tableNumbers: ["F1"] });
+ * const target = RbaRequest.Series({ seriesIds: ["FIRMMCRTD"] });
+ * ```
+ */
+export const RbaRequest = Data.taggedEnum<RbaRequest>();
+
+/** A decoded RBA table number request. */
+export const RbaTableRequest = Schema.TaggedStruct("Table", {
+  tableNumbers: Schema.NonEmptyArray(RbaTableNumber),
+});
+
+/** A decoded RBA table number request. */
+export type RbaTableRequest = typeof RbaTableRequest.Type;
+
+/** A decoded RBA series ID request. */
+export const RbaSeriesRequest = Schema.TaggedStruct("Series", {
+  seriesIds: Schema.NonEmptyArray(SeriesId),
+});
+
+/** A decoded RBA series ID request. */
+export type RbaSeriesRequest = typeof RbaSeriesRequest.Type;
+
+/** A decoded {@link RbaRequest}. */
+export const DecodedRbaRequest = Schema.Union([RbaTableRequest, RbaSeriesRequest]);
+
+/** A decoded {@link RbaRequest}. */
+export type DecodedRbaRequest = typeof DecodedRbaRequest.Type;
 
 /**
  * One table of a release: its table ID and, when known, its ABS title.
@@ -146,13 +218,50 @@ export const AbsSeries = Schema.Struct({
 export type AbsSeries = typeof AbsSeries.Type;
 
 /**
+ * One statistical table: its RBA table number and title, as the RBA tables
+ * page lists them.
+ */
+export const RbaTable = Schema.Struct({
+  tableNumber: RbaTableNumber,
+  tableTitle: Schema.String,
+});
+
+/** One statistical table. */
+export type RbaTable = typeof RbaTable.Type;
+
+/**
+ * One RBA series, read from a data sheet of a statistical table.
+ *
+ * The metadata fields come from the labelled rows above the observations, with
+ * surrounding spaces removed. `publicationDate` is an ISO `YYYY-MM-DD` string,
+ * absent when the table has no Publication date row, as the C tables do. The
+ * observations come in row order.
+ */
+export const RbaSeries = Schema.Struct({
+  publisher: Schema.Literal("RBA"),
+  seriesId: SeriesId,
+  title: Schema.String,
+  description: Schema.String,
+  unit: Schema.String,
+  seriesType: Schema.String,
+  frequency: Schema.String,
+  source: Schema.String,
+  publicationDate: Schema.optionalKey(Schema.String),
+  table: RbaTable,
+  observations: Schema.Array(Observation),
+});
+
+/** One RBA series, read from a data sheet of a statistical table. */
+export type RbaSeries = typeof RbaSeries.Type;
+
+/**
  * One sequence of observations of one measure, tagged by its publisher.
  *
  * Every member carries `seriesId`, `description`, `unit`, `seriesType`,
  * `frequency`, `table`, and `observations`. Each publisher adds its own
  * fields.
  */
-export const Series = Schema.Union([AbsSeries]);
+export const Series = Schema.Union([AbsSeries, RbaSeries]);
 
 /** One sequence of observations of one measure, tagged by its publisher. */
 export type Series = typeof Series.Type;
@@ -225,3 +334,70 @@ export class TableLayoutError extends Schema.TaggedError<TableLayoutError>()("Ta
   sheet: Schema.optionalKey(Schema.String),
   reason: Schema.String,
 }) {}
+
+/**
+ * A request to the RBA got no response, or a status outside 2xx other than a
+ * 404 on a table URL.
+ *
+ * `status` is present when the RBA answered. `detail` describes the failure
+ * as text, such as the status or the network error.
+ */
+export class RbaUnavailable extends Schema.TaggedError<RbaUnavailable>()("RbaUnavailable", {
+  url: Schema.String,
+  status: Schema.optionalKey(Schema.Number),
+  detail: Schema.String,
+}) {}
+
+/**
+ * No current statistical table has one or more of the RBA table numbers.
+ *
+ * Either the series index does not list them, or, when `url` is present, the
+ * table URL that the index lists answered 404. Both can mean that the series
+ * index is out of date, and the message says so.
+ */
+export class RbaTableNotFound extends Schema.TaggedError<RbaTableNotFound>()("RbaTableNotFound", {
+  tableNumbers: Schema.Array(RbaTableNumber),
+  url: Schema.optionalKey(Schema.String),
+}) {
+  override get message(): string {
+    const tables = this.tableNumbers.join(", ");
+
+    const cause =
+      this.url === undefined
+        ? `No current RBA statistical table has the RBA table number ${tables}.`
+        : `The RBA answered 404 for table ${tables} at ${this.url}.`;
+
+    return `${cause} The series index may be out of date: a newer ausecon release may find it.`;
+  }
+}
+
+/**
+ * The series index lists none of one or more series IDs, or the table it names
+ * does not hold them. Both can mean that the series index is out of date, and
+ * the message says so.
+ */
+export class RbaSeriesNotFound extends Schema.TaggedError<RbaSeriesNotFound>()(
+  "RbaSeriesNotFound",
+  {
+    seriesIds: Schema.Array(SeriesId),
+  },
+) {
+  override get message(): string {
+    const seriesIds = this.seriesIds.join(", ");
+
+    return `No current RBA statistical table holds the series ID ${seriesIds}. The series index may be out of date: a newer ausecon release may find it.`;
+  }
+}
+
+/**
+ * A statistical table does not have the RBA layout, or the series index lists
+ * it as unreadable. `reason` says why.
+ */
+export class RbaTableLayoutError extends Schema.TaggedError<RbaTableLayoutError>()(
+  "RbaTableLayoutError",
+  {
+    tableNumber: RbaTableNumber,
+    url: Schema.String,
+    reason: Schema.String,
+  },
+) {}

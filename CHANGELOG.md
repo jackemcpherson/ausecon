@@ -5,6 +5,56 @@ packages share one version number.
 
 ---
 
+## 0.3.0 - 2026-10-29
+
+This release reads RBA statistical tables and breaks the 0.2.0 interface.
+`ausecon abs get` CSV output and exit codes do not change.
+
+### Added
+
+- `readRba` in `@ausecon/core` reads current RBA statistical tables by RBA
+  table number with `RbaRequest.Table`, or series by series ID with
+  `RbaRequest.Series`. It reads `.xlsx` and `.xls` tables, and it matches
+  RBA table numbers and series IDs in any case. It fails with
+  `RbaUnavailable`, `RbaTableNotFound`, `RbaSeriesNotFound`,
+  `RbaTableLayoutError`, or `InvalidRequest`.
+- A series index of every series in the current tables ships with the
+  library. `readRba` finds each table through it. This release lists 4,364
+  series from 88 tables, and 6 tables that the library cannot read: A5 and
+  E3 to E7.
+- `searchSeries` searches the series index by words with no request, and
+  takes an optional `limit`.
+- `resolveSeriesId` names the publisher of a series ID from its pattern, or
+  from an `abs:` or `rba:` prefix.
+- `ausecon get <series id...>` reads series IDs from the ABS and the RBA in
+  one call. Its CSV columns are `publisher`, `table`, then the 8 columns that
+  both publishers fill.
+- `ausecon rba get <rba table number...>` reads RBA statistical tables. Its
+  CSV columns are `tableNumber`, the 8 shared columns, then `title`, `source`,
+  and `publicationDate`.
+- `ausecon search <word...>` searches the series index. A terminal gets
+  aligned columns, and a pipe gets CSV or, with `--format json`, JSON.
+  `--limit` defaults to 20.
+- Each RBA failure exits with the code of its ABS counterpart and names a
+  next step.
+
+### Changed
+
+- `Series` is a union of `AbsSeries` and `RbaSeries`, tagged by a new
+  `publisher` field, `ABS` or `RBA`. `readAbs` returns `AbsSeries`. Code that
+  reads a field that only one member has must check `publisher` first.
+- The ABS `seriesDescription` field is now `description`.
+- `ausecon abs get --format json` writes each series with `publisher` and
+  `description`, in place of `seriesDescription`.
+- `SeriesId` accepts RBA series IDs, such as `FIRMMCRTD`, as well as ABS
+  series IDs. `readAbs` still checks the ABS pattern, so an RBA series ID in
+  an ABS request fails with `InvalidRequest`.
+
+### Deprecated
+
+- `ausecon abs get --series` writes a note on stderr that names
+  `ausecon get`. The next release removes it.
+
 ## 0.2.0 - 2026-10-27
 
 This release returns series from `readAbs` and breaks the 0.1.0 interface.
