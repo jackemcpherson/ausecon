@@ -451,13 +451,13 @@ export const SERIES_INDEX: SeriesIndex = {
       tableNumber: "G1",
       title: "Consumer Price Inflation",
       url: "https://www.rba.gov.au/statistics/tables/xls/g01hist.xlsx",
-      lastModified: "2026-07-30T01:16:43.000Z",
+      lastModified: "2026-10-29T05:11:08.000Z",
     },
     {
       tableNumber: "G2",
       title: "Consumer Price Inflation – Expenditure Groups",
       url: "https://www.rba.gov.au/statistics/tables/xls/g02hist.xlsx",
-      lastModified: "2026-07-30T01:16:43.000Z",
+      lastModified: "2026-10-29T05:11:08.000Z",
     },
     {
       tableNumber: "G3",
@@ -469,7 +469,7 @@ export const SERIES_INDEX: SeriesIndex = {
       tableNumber: "G4",
       title: "Consumer Price Inflation – Monthly Collection",
       url: "https://www.rba.gov.au/statistics/tables/xls/g04hist.xlsx",
-      lastModified: "2026-10-01T01:15:26.000Z",
+      lastModified: "2026-10-29T05:09:54.000Z",
     },
     {
       tableNumber: "H1",
