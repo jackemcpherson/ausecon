@@ -19,6 +19,9 @@ of Jack's TypeScript standards: follow them strictly.
   Node, Bun, or terminal APIs (`types: []`, lint bans `process`, `Bun`,
   `Buffer`). No `throw`, `try`, or `Effect.orDie` in `src/`.
 - `packages/cli` (`ausecon`): command-line tool on `effect/cli`.
+- `packages/rba-index`: private. `bun run rba:index` rebuilds the RBA series
+  index in core from the live RBA site; `--accept-unreadable` accepts a
+  changed set of unreadable tables.
 - `tools/oxlint/anti-slop`: vendored, do not edit. See `UPSTREAM.md`.
 - `tools/oxlint/house`: project lint rules.
 

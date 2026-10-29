@@ -137,6 +137,57 @@ describe("readRba on a synthetic statistical table", () => {
       expect(series.map(({ unit }) => unit)).toEqual(["Per cent"]);
     }),
   );
+
+  it.effect("reads every sheet with a series ID row, in sheet order, and skips the rest", () =>
+    Effect.gen(function* () {
+      const series = yield* readSynthetic(
+        syntheticTable([
+          ["Summary", rbaDataSheet([RATE], [[46022, 4.35]])],
+          [
+            "Use of Expert Judgement",
+            [
+              ["Date", "Note"],
+              [46022, "None"],
+            ],
+          ],
+          ["Developed countries", rbaDataSheet([COUNT], [[46022, 10]])],
+          ["Notes", [["Notes"], ["See notes"]]],
+        ]),
+      );
+
+      expect(series.map(({ seriesId, observations }) => [seriesId, observations])).toEqual([
+        ["ZSYNRATE", [{ date: "2025-12-31", value: 4.35 }]],
+        ["ZSYNCOUNT1", [{ date: "2025-12-31", value: 10 }]],
+      ]);
+    }),
+  );
+
+  it.effect("reads a Mnemonic row as the series ID row", () =>
+    Effect.gen(function* () {
+      const rows = rbaDataSheet([RATE], [[46022, 4.35]]).map((row) =>
+        row[0] === "Series ID" ? ["Mnemonic", ...row.slice(1)] : row,
+      );
+
+      const series = yield* readSynthetic(syntheticTable([["Data", rows]]));
+
+      expect(series.map(({ seriesId, publicationDate }) => [seriesId, publicationDate])).toEqual([
+        ["ZSYNRATE", "2026-10-01"],
+      ]);
+    }),
+  );
+
+  it.effect("leaves out the publication date when the sheet has no Publication date row", () =>
+    Effect.gen(function* () {
+      const rows = rbaDataSheet([RATE], [[46022, 4.35]]).filter(
+        (row) => row[0] !== "Publication date",
+      );
+
+      const [series] = yield* readSynthetic(syntheticTable([["Data", rows]]));
+
+      expect(series).toMatchObject({ seriesId: "ZSYNRATE", source: "RBA" });
+      expect(series).not.toHaveProperty("publicationDate");
+    }),
+  );
 });
 
 describe("readRba on a synthetic table without the RBA layout", () => {
@@ -155,34 +206,51 @@ describe("readRba on a synthetic table without the RBA layout", () => {
     }),
   );
 
-  it.effect("fails with RbaTableLayoutError when the table has no Data sheet", () =>
+  it.effect("fails with RbaTableLayoutError when no sheet has a series ID row", () =>
     Effect.gen(function* () {
       const error = yield* readSynthetic(
-        syntheticTable([["2018", rbaDataSheet([RATE], [[46022, 4.35]])]]),
+        syntheticTable([
+          ["2018", [["E3 DISTRIBUTION"], ["Size", "Share"], [100, 0.5]]],
+          ["Notes", [["Notes"]]],
+        ]),
       ).pipe(Effect.flip);
 
       expect(error._tag).toBe("RbaTableLayoutError");
-      expect(error).toHaveProperty("reason", "The table has no `Data` sheet with cells.");
+      expect(error).toHaveProperty(
+        "reason",
+        "No sheet has a `Series ID` or `Mnemonic` row in column A.",
+      );
+    }),
+  );
+
+  it.effect("names the sheet whose layout fails", () =>
+    Effect.gen(function* () {
+      const error = yield* readSynthetic(
+        syntheticTable([
+          ["Summary", rbaDataSheet([RATE], [[46022, 4.35]])],
+          ["Offshore centres", rbaDataSheet([{ ...COUNT, seriesId: "Total" }], [[46022, 10]])],
+        ]),
+      ).pipe(Effect.flip);
+
+      expect(error).toHaveProperty(
+        "reason",
+        "Sheet `Offshore centres`: Cell B11 holds `Total`, which is not a series ID.",
+      );
     }),
   );
 
   const layoutFailures: ReadonlyArray<readonly [string, SyntheticRows, string]> = [
     [
-      "column A has no Series ID row",
-      rbaDataSheet([RATE], [[46022, 4.35]]).filter((row) => row[0] !== "Series ID"),
-      "Column A has no `Series ID` row.",
-    ],
-    [
       "label rows are missing",
       rbaDataSheet([RATE], [[46022, 4.35]]).filter(
-        (row) => row[0] !== "Type" && row[0] !== "Publication date",
+        (row) => row[0] !== "Title" && row[0] !== "Type",
       ),
-      "Column A above `Series ID` lacks the rows: `Type`, `Publication date`.",
+      "Sheet `Data`: Column A above `Series ID` lacks the rows: `Title`, `Type`.",
     ],
     [
       "the Series ID row holds text that is not a series ID",
       rbaDataSheet([RATE, { ...RATE, seriesId: "Total" }], [[46022, 4.35, 1]]),
-      "Cell C11 holds `Total`, which is not a series ID.",
+      "Sheet `Data`: Cell C11 holds `Total`, which is not a series ID.",
     ],
     [
       "column A holds text that is not a date",
@@ -193,22 +261,22 @@ describe("readRba on a synthetic table without the RBA layout", () => {
           ["Total", 9],
         ],
       ),
-      "Cell A13 holds `Total`, which is not a date or a blank.",
+      "Sheet `Data`: Cell A13 holds `Total`, which is not a date or a blank.",
     ],
     [
       "column A holds a text date that is not on the calendar",
       rbaDataSheet([RATE], [["31/02/2026", 4.35]]),
-      "Cell A12 holds `31/02/2026`, which is not a date or a blank.",
+      "Sheet `Data`: Cell A12 holds `31/02/2026`, which is not a date or a blank.",
     ],
     [
       "column A holds a text date with an unknown month",
       rbaDataSheet([RATE], [["01-Spt-2026", 4.35]]),
-      "Cell A12 holds `01-Spt-2026`, which is not a date or a blank.",
+      "Sheet `Data`: Cell A12 holds `01-Spt-2026`, which is not a date or a blank.",
     ],
     [
       "a publication date is not a date",
       rbaDataSheet([{ ...RATE, publicationDate: "Oct-2026" }], [[46022, 4.35]]),
-      "Cell B10 holds `Oct-2026`, which is not a publication date.",
+      "Sheet `Data`: Cell B10 holds `Oct-2026`, which is not a publication date.",
     ],
   ];
 

@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "paths": {
+      "@ausecon/testkit": ["../testkit/index.ts"]
+    }
+  },
+  "include": ["*.ts", "test/**/*"]
+}
