@@ -6,13 +6,13 @@ import { Reader } from "../../src/reader";
 import { runCli } from "../run-cli";
 
 const METADATA_HEADER =
-  "tableTitle,date,seriesDescription,value,seriesType,frequency,seriesId,unit,title,source,publicationDate";
+  "tableNumber,tableTitle,date,seriesDescription,value,seriesType,frequency,seriesId,unit,title,source,publicationDate";
 
 // Checked by hand against f01d.xlsx sheet Data: column B (FIRMMCRTD) is the
 // first series, and its first dated row is 2011-01-04 at 4.75 per cent. The
 // publication date is serial 46324.
 const FIRST_METADATA_ROW =
-  "Interest Rates and Yields – Money Market – Daily,2011-01-04,Cash Rate Target on date,4.75,Original,Daily,FIRMMCRTD,Per cent,Cash Rate Target,RBA,2026-10-29";
+  "F1,Interest Rates and Yields – Money Market – Daily,2011-01-04,Cash Rate Target on date,4.75,Original,Daily,FIRMMCRTD,Per cent,Cash Rate Target,RBA,2026-10-29";
 
 // The library returns 45,988 observations across the 17 series of the recorded F1.
 const OBSERVATION_COUNT = 45_988;

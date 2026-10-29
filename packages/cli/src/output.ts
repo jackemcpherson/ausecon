@@ -1,6 +1,6 @@
-import type { AbsSeries, RbaSeries } from "@ausecon/core";
+import type { AbsSeries, RbaSeries, Series } from "@ausecon/core";
 
-/** An output format of `ausecon abs get` and `ausecon rba get`. */
+/** An output format of the `get` commands. */
 export type OutputFormat = "csv" | "json";
 
 /** The output formats, in the order help lists them. */
@@ -40,8 +40,21 @@ const SHARED_COLUMNS = [
   "unit",
 ] as const;
 
-/** The RBA CSV columns: the shared columns, then the RBA metadata. */
-const RBA_COLUMNS = [...SHARED_COLUMNS, "title", "source", "publicationDate"] as const;
+/** The RBA CSV columns: the RBA table number, the shared columns, then the RBA metadata. */
+const RBA_COLUMNS = [
+  "tableNumber",
+  ...SHARED_COLUMNS,
+  "title",
+  "source",
+  "publicationDate",
+] as const;
+
+/**
+ * The CSV columns of `ausecon get`: the publisher, the table that holds the
+ * series, then the shared columns. `table` holds an ABS table ID or an RBA
+ * table number.
+ */
+const SERIES_COLUMNS = ["publisher", "table", ...SHARED_COLUMNS] as const;
 
 /** The CSV columns with `--no-metadata`, for either publisher. */
 const COLUMNS_WITHOUT_METADATA = ["seriesId", "date", "value"] as const;
@@ -49,6 +62,8 @@ const COLUMNS_WITHOUT_METADATA = ["seriesId", "date", "value"] as const;
 type AbsColumn = (typeof ABS_COLUMNS)[number];
 
 type RbaColumn = (typeof RBA_COLUMNS)[number];
+
+type SeriesColumn = (typeof SERIES_COLUMNS)[number];
 
 /** One CSV row: one observation with the metadata of its series. */
 type CsvRow<Column extends string> = Readonly<Record<Column, string | number>>;
@@ -76,6 +91,7 @@ const absRows = (series: ReadonlyArray<AbsSeries>): ReadonlyArray<CsvRow<AbsColu
 const rbaRows = (series: ReadonlyArray<RbaSeries>): ReadonlyArray<CsvRow<RbaColumn>> =>
   series.flatMap((one) =>
     one.observations.map(({ date, value }): CsvRow<RbaColumn> => ({
+      tableNumber: one.table.tableNumber,
       tableTitle: one.table.tableTitle,
       date,
       seriesDescription: one.description,
@@ -89,6 +105,31 @@ const rbaRows = (series: ReadonlyArray<RbaSeries>): ReadonlyArray<CsvRow<RbaColu
       publicationDate: one.publicationDate,
     })),
   );
+
+/**
+ * Flatten Series from either publisher into one row per observation. An
+ * absent ABS table title is empty.
+ */
+const seriesRows = (series: ReadonlyArray<Series>): ReadonlyArray<CsvRow<SeriesColumn>> =>
+  series.flatMap((one) => {
+    const [table, tableTitle] =
+      one.publisher === "ABS"
+        ? [one.table.tableId, one.table.tableTitle ?? ""]
+        : [one.table.tableNumber, one.table.tableTitle];
+
+    return one.observations.map(({ date, value }): CsvRow<SeriesColumn> => ({
+      publisher: one.publisher,
+      table,
+      tableTitle,
+      date,
+      seriesDescription: one.description,
+      value,
+      seriesType: one.seriesType,
+      frequency: one.frequency,
+      seriesId: one.seriesId,
+      unit: one.unit,
+    }));
+  });
 
 /** Quote a CSV field when it holds a comma, a quote, or a line break (RFC 4180). */
 const csvField = (value: string | number): string => {
@@ -107,7 +148,7 @@ const toCsv = <Column extends string>(
   ].join("\n");
 
 /** A Series without its metadata, as `--no-metadata` writes it in JSON. */
-const withoutMetadata = ({ seriesId, observations }: AbsSeries | RbaSeries) => ({
+const withoutMetadata = ({ seriesId, observations }: Series) => ({
   seriesId,
   observations,
 });
@@ -120,7 +161,7 @@ export interface RenderOptions {
 }
 
 /** Render Series as JSON: the Series list, indented only for a terminal. */
-const toJson = (series: ReadonlyArray<AbsSeries | RbaSeries>, options: RenderOptions): string =>
+const toJson = (series: ReadonlyArray<Series>, options: RenderOptions): string =>
   JSON.stringify(
     options.hasMetadata ? series : series.map(withoutMetadata),
     null,
@@ -153,8 +194,8 @@ export const renderAbsSeries = (
 /**
  * Render RBA Series for stdout.
  *
- * CSV writes the shared columns, then `title`, `source`, and
- * `publicationDate`. Every other rule is that of {@link renderAbsSeries}.
+ * CSV writes the RBA table number, the shared columns, then `title`,
+ * `source`, and `publicationDate`. Every other rule is that of {@link renderAbsSeries}.
  *
  * @param series - The Series to write.
  * @param options - The output format, whether to write metadata, and whether
@@ -170,3 +211,22 @@ export const renderRbaSeries = (
     : options.hasMetadata
       ? toCsv(RBA_COLUMNS, rbaRows(series))
       : toCsv(COLUMNS_WITHOUT_METADATA, rbaRows(series));
+
+/**
+ * Render Series from either publisher for stdout.
+ *
+ * CSV writes `publisher`, then `table` (the ABS table ID or the RBA table
+ * number), then the shared columns, so one header fits both publishers. Every
+ * other rule is that of {@link renderAbsSeries}.
+ *
+ * @param series - The Series to write.
+ * @param options - The output format, whether to write metadata, and whether
+ * stdout is a terminal.
+ * @returns The text to write to stdout.
+ */
+export const renderSeries = (series: ReadonlyArray<Series>, options: RenderOptions): string =>
+  options.format === "json"
+    ? toJson(series, options)
+    : options.hasMetadata
+      ? toCsv(SERIES_COLUMNS, seriesRows(series))
+      : toCsv(COLUMNS_WITHOUT_METADATA, seriesRows(series));

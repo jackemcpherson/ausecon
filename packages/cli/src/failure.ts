@@ -18,22 +18,20 @@ export const EXIT_CODE = {
 } as const;
 
 /**
- * An RBA request that failed decoding. `ausecon rba get` turns the library's
- * `InvalidRequest` into this error: `ReadAbsError` shares that tag, and the
- * next step must name the RBA command.
+ * A request that failed decoding in `ausecon get` or `ausecon rba get`. Each
+ * turns the library's `InvalidRequest` into this error, so the next step names
+ * its own help rather than that of `ausecon abs get`.
  */
-export class RbaInvalidRequest extends Schema.TaggedError<RbaInvalidRequest>()(
-  "RbaInvalidRequest",
-  { message: Schema.String },
+export class CommandInvalidRequest extends Schema.TaggedError<CommandInvalidRequest>()(
+  "CommandInvalidRequest",
+  { command: Schema.Literals(["get", "rba get"]), message: Schema.String },
 ) {}
 
-/** The RBA read errors, as `ausecon rba get` fails with them. */
-export type RbaCommandError =
-  | Exclude<ReadRbaError, { readonly _tag: "InvalidRequest" }>
-  | RbaInvalidRequest;
-
 /** Every read error a command can fail with. */
-type ReadError = ReadAbsError | RbaCommandError;
+type ReadError =
+  | ReadAbsError
+  | Exclude<ReadRbaError, { readonly _tag: "InvalidRequest" }>
+  | CommandInvalidRequest;
 
 /** Every error a command can fail with. */
 export type CommandError = ReadError | CliError.CliError;
@@ -51,7 +49,8 @@ const outcome = (exitCode: number, message: string, nextStep: string): Outcome =
 
 const USAGE_HINT = "Run `ausecon abs get --help` for usage and examples.";
 
-const RBA_USAGE_HINT = "Run `ausecon rba get --help` for usage and examples.";
+const usageHintFor = (command: CommandInvalidRequest["command"]): string =>
+  `Run \`ausecon ${command} --help\` for usage and examples.`;
 
 const ISSUES = "https://github.com/jackemcpherson/ausecon/issues";
 
@@ -107,8 +106,8 @@ const describeCliError = (
  * read error does not compile until it has an exit code and a next step.
  *
  * Each RBA failure exits with the code of its ABS counterpart. A missing RBA
- * table can mean that the series index that ships with ausecon is out of
- * date, so its next step is to update ausecon.
+ * table or series can mean that the series index that ships with ausecon is
+ * out of date, so its next step is to update ausecon.
  */
 const describeReadError: (error: ReadError) => Outcome = Match.type<ReadError>().pipe(
   Match.tag("InvalidRequest", (error) => outcome(EXIT_CODE.usage, error.message, USAGE_HINT)),
@@ -148,8 +147,15 @@ const describeReadError: (error: ReadError) => Outcome = Match.type<ReadError>()
       REPORT_IT,
     ),
   ),
-  Match.tag("RbaInvalidRequest", (error) =>
-    outcome(EXIT_CODE.usage, error.message, RBA_USAGE_HINT),
+  Match.tag("CommandInvalidRequest", (error) =>
+    outcome(EXIT_CODE.usage, error.message, usageHintFor(error.command)),
+  ),
+  Match.tag("RbaSeriesNotFound", (error) =>
+    outcome(
+      EXIT_CODE.notFound,
+      error.message,
+      `Find the series ID with \`ausecon search <word>\`. If it is right, ${UPDATE_AUSECON}`,
+    ),
   ),
   Match.tag("RbaTableNotFound", (error) =>
     outcome(

@@ -48,7 +48,7 @@ const RURAL_DEBT = Schema.decodeSync(RbaSeries)({
 });
 
 const METADATA_HEADER =
-  "tableTitle,date,seriesDescription,value,seriesType,frequency,seriesId,unit,title,source,publicationDate";
+  "tableNumber,tableTitle,date,seriesDescription,value,seriesType,frequency,seriesId,unit,title,source,publicationDate";
 
 const ISSUES = "https://github.com/jackemcpherson/ausecon/issues";
 
@@ -57,22 +57,24 @@ const reading = (series: ReadonlyArray<RbaSeries>) => fakeReader({ rba: Effect.s
 const tableNumber = Schema.decodeSync(RbaTableNumber);
 
 describe("ausecon rba get output", () => {
-  it.effect("writes the shared columns, then the RBA metadata, as CSV by default", () =>
-    Effect.gen(function* () {
-      const result = yield* runCli(
-        ["rba", "get", "F1", "D9"],
-        reading([CASH_RATE, RURAL_DEBT]).layer,
-      );
+  it.effect(
+    "writes the RBA table number, the shared columns, then the RBA metadata, as CSV by default",
+    () =>
+      Effect.gen(function* () {
+        const result = yield* runCli(
+          ["rba", "get", "F1", "D9"],
+          reading([CASH_RATE, RURAL_DEBT]).layer,
+        );
 
-      expect(result.exitCode).toBe(0);
-      expect(result.stderr).toBe("");
-      expect(result.stdout.split("\n")).toEqual([
-        METADATA_HEADER,
-        "Interest Rates and Yields – Money Market – Daily,2011-01-04,Cash Rate Target on date,4.75,Original,Daily,FIRMMCRTD,Per cent,Cash Rate Target,RBA,2026-10-29",
-        "Interest Rates and Yields – Money Market – Daily,2026-10-28,Cash Rate Target on date,4.6,Original,Daily,FIRMMCRTD,Per cent,Cash Rate Target,RBA,2026-10-29",
-        'Rural Debt by Lender,1965-06-30,Rural debt by all banks,656,Original,Annual,DRDAB,$ million,"Rural debt, all banks",APRA,2025-11-28',
-      ]);
-    }),
+        expect(result.exitCode).toBe(0);
+        expect(result.stderr).toBe("");
+        expect(result.stdout.split("\n")).toEqual([
+          METADATA_HEADER,
+          "F1,Interest Rates and Yields – Money Market – Daily,2011-01-04,Cash Rate Target on date,4.75,Original,Daily,FIRMMCRTD,Per cent,Cash Rate Target,RBA,2026-10-29",
+          "F1,Interest Rates and Yields – Money Market – Daily,2026-10-28,Cash Rate Target on date,4.6,Original,Daily,FIRMMCRTD,Per cent,Cash Rate Target,RBA,2026-10-29",
+          'D9,Rural Debt by Lender,1965-06-30,Rural debt by all banks,656,Original,Annual,DRDAB,$ million,"Rural debt, all banks",APRA,2025-11-28',
+        ]);
+      }),
   );
 
   it.effect("writes only the header when the read returns no Series", () =>
