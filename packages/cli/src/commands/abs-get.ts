@@ -16,7 +16,9 @@ const flags = {
     Flag.atLeast(0),
   ),
   series: Flag.String("series").pipe(
-    Flag.withDescription("Series ID to read, such as A2603039T. Repeat for more series."),
+    Flag.withDescription(
+      "Deprecated: use `ausecon get`. Series ID to read, such as A2603039T. Repeat for more series.",
+    ),
     Flag.atLeast(0),
   ),
   ...outputFlags,
@@ -48,8 +50,18 @@ const requestOf = (input: GetInput): Effect.Effect<AbsRequest, CliError.Validati
         : Effect.succeed(AbsRequest.Catalogue({ catalogueNumber, tableNumbers: input.table })),
   });
 
+/** The stderr note for `--series`, which the next release removes. */
+const SERIES_NOTE =
+  "ausecon: --series is deprecated and the next release removes it. " +
+  "Use `ausecon get <series id...>`, which reads ABS and RBA series IDs.";
+
 const get = Effect.fn("absGet")(function* (input: GetInput) {
   const request = yield* requestOf(input);
+
+  if (input.series.length > 0) {
+    yield* Console.error(SERIES_NOTE);
+  }
+
   const isTerminal = yield* (yield* Stdio.Stdio).stdoutIsTerminal;
   const series = yield* (yield* Reader).readAbs(request);
 

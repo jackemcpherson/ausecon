@@ -2,7 +2,7 @@ import { RbaRequest, RbaTableNumber } from "@ausecon/core";
 import { Console, Effect, Schema, Stdio } from "effect";
 import { Argument, CliError, Command } from "effect/cli";
 
-import { RbaInvalidRequest } from "../failure";
+import { CommandInvalidRequest } from "../failure";
 import { renderRbaSeries } from "../output";
 import { Reader } from "../reader";
 import { outputFlags } from "./output-flags";
@@ -45,7 +45,7 @@ const get = Effect.fn("rbaGet")(function* (input: GetInput) {
     .readRba(RbaRequest.Table({ tableNumbers: input.tableNumbers }))
     .pipe(
       Effect.catchTag("InvalidRequest", (error) =>
-        Effect.fail(new RbaInvalidRequest({ message: error.message })),
+        Effect.fail(new CommandInvalidRequest({ command: "rba get", message: error.message })),
       ),
     );
 
