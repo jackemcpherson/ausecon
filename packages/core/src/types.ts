@@ -120,12 +120,17 @@ export type RbaTableNumber = typeof RbaTableNumber.Type;
 /**
  * A request to read RBA statistical tables, as the caller writes it.
  *
- * The `Table` variant reads current tables by RBA table number. The read
- * upper-cases and decodes the table numbers, so `f1.1` finds F1.1.
+ * The `Table` variant reads current tables by RBA table number. The `Series`
+ * variant reads one or more series IDs, without their table numbers. The read
+ * upper-cases and decodes both, so `f1.1` finds F1.1 and `firmmcrtd` finds
+ * FIRMMCRTD.
  */
 export type RbaRequest = Data.TaggedEnum<{
   Table: {
     readonly tableNumbers: ReadonlyArray<string>;
+  };
+  Series: {
+    readonly seriesIds: ReadonlyArray<string>;
   };
 }>;
 
@@ -135,6 +140,7 @@ export type RbaRequest = Data.TaggedEnum<{
  * @example
  * ```typescript
  * const cashRate = RbaRequest.Table({ tableNumbers: ["F1"] });
+ * const target = RbaRequest.Series({ seriesIds: ["FIRMMCRTD"] });
  * ```
  */
 export const RbaRequest = Data.taggedEnum<RbaRequest>();
@@ -147,8 +153,16 @@ export const RbaTableRequest = Schema.TaggedStruct("Table", {
 /** A decoded RBA table number request. */
 export type RbaTableRequest = typeof RbaTableRequest.Type;
 
+/** A decoded RBA series ID request. */
+export const RbaSeriesRequest = Schema.TaggedStruct("Series", {
+  seriesIds: Schema.NonEmptyArray(SeriesId),
+});
+
+/** A decoded RBA series ID request. */
+export type RbaSeriesRequest = typeof RbaSeriesRequest.Type;
+
 /** A decoded {@link RbaRequest}. */
-export const DecodedRbaRequest = Schema.Union([RbaTableRequest]);
+export const DecodedRbaRequest = Schema.Union([RbaTableRequest, RbaSeriesRequest]);
 
 /** A decoded {@link RbaRequest}. */
 export type DecodedRbaRequest = typeof DecodedRbaRequest.Type;
@@ -353,6 +367,24 @@ export class RbaTableNotFound extends Schema.TaggedError<RbaTableNotFound>()("Rb
         : `The RBA answered 404 for table ${tables} at ${this.url}.`;
 
     return `${cause} The series index may be out of date: a newer ausecon release may find it.`;
+  }
+}
+
+/**
+ * The series index lists none of one or more series IDs, or the table it names
+ * does not hold them. Both can mean that the series index is out of date, and
+ * the message says so.
+ */
+export class RbaSeriesNotFound extends Schema.TaggedError<RbaSeriesNotFound>()(
+  "RbaSeriesNotFound",
+  {
+    seriesIds: Schema.Array(SeriesId),
+  },
+) {
+  override get message(): string {
+    const seriesIds = this.seriesIds.join(", ");
+
+    return `No current RBA statistical table holds the series ID ${seriesIds}. The series index may be out of date: a newer ausecon release may find it.`;
   }
 }
 

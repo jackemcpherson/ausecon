@@ -4,9 +4,13 @@ import { DecodedRbaRequest, InvalidRequest, RbaRequest } from "../types";
 
 const normaliseCode = (code: string): string => code.trim().toUpperCase();
 
-/** Normalise caller input before schema decoding: upper-case RBA table numbers. */
+/**
+ * Normalise caller input before schema decoding: upper-case RBA table numbers
+ * and series IDs.
+ */
 const normalise: (request: RbaRequest) => RbaRequest = RbaRequest.$match({
   Table: (request) => RbaRequest.Table({ tableNumbers: request.tableNumbers.map(normaliseCode) }),
+  Series: (request) => RbaRequest.Series({ seriesIds: request.seriesIds.map(normaliseCode) }),
 });
 
 /**

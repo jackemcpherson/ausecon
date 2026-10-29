@@ -6,6 +6,8 @@ export { readRba, type ReadRbaError } from "./rba/statistical-tables";
 
 export { searchSeries, type SearchSeriesOptions, type SeriesIndexEntry } from "./rba/series-search";
 
+export { resolveSeriesId, type Publisher, type ResolvedSeriesId } from "./series-id";
+
 export {
   AbsRequest,
   AbsSeries,
@@ -16,6 +18,7 @@ export {
   Observation,
   RbaRequest,
   RbaSeries,
+  RbaSeriesNotFound,
   RbaTable,
   RbaTableLayoutError,
   RbaTableNotFound,

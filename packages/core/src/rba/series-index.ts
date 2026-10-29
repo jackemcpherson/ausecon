@@ -50,6 +50,17 @@ const unreadableTables = new Map(
   SERIES_INDEX.unreadableTables.map((table) => [table.tableNumber, table]),
 );
 
+const indexedSeries = new Map(SERIES_INDEX.series.map((series) => [series.seriesId, series]));
+
+/**
+ * Find a series in the series index.
+ *
+ * @param seriesId - The upper-case series ID.
+ * @returns The series, or `undefined` when the index does not list it.
+ */
+export const findSeries = (seriesId: string): IndexedSeries | undefined =>
+  indexedSeries.get(seriesId);
+
 /**
  * Find a readable statistical table in the series index.
  *
