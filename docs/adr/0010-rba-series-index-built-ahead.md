@@ -36,3 +36,8 @@ date. A table URL that answers 404 fails with `RbaTableNotFound` for the same
 reason. The index lists each table that failed to parse at index time, with the
 reason. The ABS keeps the Time Series Directory for reads. A later
 release decides where an ABS series index lives, after measuring its size.
+
+The first full index held 4,364 series from 88 tables. It adds about 1.8 MB
+to the built library, or about 70 KB gzipped. A later release can move the
+index behind its own entry point if that size troubles callers who read only
+ABS data.
