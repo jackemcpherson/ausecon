@@ -160,6 +160,13 @@ const describeReadError: (error: ReadError) => Outcome = Match.type<ReadError>()
         : `The RBA may have moved the table: ${UPDATE_AUSECON}`,
     ),
   ),
+  Match.tag("RbaSeriesNotFound", (error) =>
+    outcome(
+      EXIT_CODE.notFound,
+      error.message,
+      `Find the series ID with \`ausecon search\`. If it is right, ${UPDATE_AUSECON}`,
+    ),
+  ),
   Match.tag("RbaUnavailable", (error) => describeUnavailable(error, "RBA")),
   Match.tag("RbaTableLayoutError", (error) =>
     outcome(
