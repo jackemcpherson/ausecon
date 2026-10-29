@@ -216,11 +216,12 @@ export const RbaTable = Schema.Struct({
 export type RbaTable = typeof RbaTable.Type;
 
 /**
- * One RBA series, read from the Data sheet of a statistical table.
+ * One RBA series, read from a data sheet of a statistical table.
  *
  * The metadata fields come from the labelled rows above the observations, with
- * surrounding spaces removed. `publicationDate` is an ISO `YYYY-MM-DD` string.
- * The observations come in row order.
+ * surrounding spaces removed. `publicationDate` is an ISO `YYYY-MM-DD` string,
+ * absent when the table has no Publication date row, as the C tables do. The
+ * observations come in row order.
  */
 export const RbaSeries = Schema.Struct({
   publisher: Schema.Literal("RBA"),
@@ -231,12 +232,12 @@ export const RbaSeries = Schema.Struct({
   seriesType: Schema.String,
   frequency: Schema.String,
   source: Schema.String,
-  publicationDate: Schema.String,
+  publicationDate: Schema.optionalKey(Schema.String),
   table: RbaTable,
   observations: Schema.Array(Observation),
 });
 
-/** One RBA series, read from the Data sheet of a statistical table. */
+/** One RBA series, read from a data sheet of a statistical table. */
 export type RbaSeries = typeof RbaSeries.Type;
 
 /**
