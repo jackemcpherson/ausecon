@@ -3,12 +3,12 @@ import type { HttpClient } from "effect/http";
 
 import {
   type AbsRequest,
+  type AbsSeries,
   type AbsUnavailable,
   type CatalogueNotFound,
   type CatalogueRequest,
   type DecodedAbsRequest,
   type InvalidRequest,
-  type Series,
   SeriesNotFound,
   type SeriesRequest,
   type TableNotFound,
@@ -31,7 +31,7 @@ export type ReadAbsError =
 
 const readCatalogue = (
   request: CatalogueRequest,
-): Effect.Effect<ReadonlyArray<Series>, ReadAbsError, HttpClient.HttpClient> =>
+): Effect.Effect<ReadonlyArray<AbsSeries>, ReadAbsError, HttpClient.HttpClient> =>
   catalogueTables(request.catalogueNumber, request.tableNumbers).pipe(
     Effect.flatMap(readTables),
     Effect.map((tables) => tables.flatMap(({ series }) => series)),
@@ -39,7 +39,7 @@ const readCatalogue = (
 
 const readSeries = (
   request: SeriesRequest,
-): Effect.Effect<ReadonlyArray<Series>, ReadAbsError, HttpClient.HttpClient> =>
+): Effect.Effect<ReadonlyArray<AbsSeries>, ReadAbsError, HttpClient.HttpClient> =>
   Effect.gen(function* () {
     const located = yield* seriesTables(request.seriesIds);
     const tables = yield* readTables(located.tables);
@@ -60,7 +60,7 @@ const readSeries = (
 
 const readDecoded: (
   request: DecodedAbsRequest,
-) => Effect.Effect<ReadonlyArray<Series>, ReadAbsError, HttpClient.HttpClient> =
+) => Effect.Effect<ReadonlyArray<AbsSeries>, ReadAbsError, HttpClient.HttpClient> =
   Match.type<DecodedAbsRequest>().pipe(
     Match.tag("Catalogue", readCatalogue),
     Match.tag("Series", readSeries),
@@ -92,7 +92,7 @@ const readDecoded: (
  */
 export const readAbs: (
   request: AbsRequest,
-) => Effect.Effect<ReadonlyArray<Series>, ReadAbsError, HttpClient.HttpClient> = Effect.fn(
+) => Effect.Effect<ReadonlyArray<AbsSeries>, ReadAbsError, HttpClient.HttpClient> = Effect.fn(
   "readAbs",
 )(function* (request: AbsRequest) {
   return yield* readDecoded(yield* decodeRequest(request));

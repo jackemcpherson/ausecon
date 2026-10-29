@@ -48,8 +48,9 @@ observations:
 
 ```ts
 {
+  publisher: "ABS",
   seriesId: "A2603039T",
-  seriesDescription: "Quarterly Index ;  Total hourly rates of pay excluding bonuses ;  ...",
+  description: "Quarterly Index ;  Total hourly rates of pay excluding bonuses ;  ...",
   unit: "Index Numbers",
   seriesType: "Original",
   dataType: "INDEX",
@@ -67,7 +68,9 @@ observations:
 Series come in table order, then sheet order, then column order, and
 observations in row order. Dates are ISO 8601 strings such as `1997-09-01`, so
 time zones never shift a period. Blank and text cells give no observation.
-The `Series`, `Table`, and `Observation` types describe this shape.
+`Series` is a union tagged by `publisher`. `readAbs` returns its ABS member,
+`AbsSeries`. The `Table` and `Observation` types describe the rest of the
+shape.
 
 Leave out `tableNumbers` to read every table of the catalogue number. To read
 series IDs instead, pass a series request:

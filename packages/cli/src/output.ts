@@ -1,4 +1,4 @@
-import type { Series } from "@ausecon/core";
+import type { AbsSeries } from "@ausecon/core";
 
 /** An output format of `ausecon abs get`. */
 export type OutputFormat = "csv" | "json";
@@ -34,14 +34,14 @@ type CsvColumn = (typeof CSV_COLUMNS)[number];
 type CsvRow = Readonly<Record<CsvColumn, string | number>>;
 
 /** Flatten Series into one row per observation. An absent table title is empty. */
-const csvRows = (series: ReadonlyArray<Series>): ReadonlyArray<CsvRow> =>
+const csvRows = (series: ReadonlyArray<AbsSeries>): ReadonlyArray<CsvRow> =>
   series.flatMap((one) =>
     one.observations.map(({ date, value }): CsvRow => ({
       tableId: one.table.tableId,
       sheet: one.sheet,
       tableTitle: one.table.tableTitle ?? "",
       date,
-      seriesDescription: one.seriesDescription,
+      seriesDescription: one.description,
       value,
       seriesType: one.seriesType,
       dataType: one.dataType,
@@ -66,7 +66,7 @@ const toCsv = (columns: ReadonlyArray<CsvColumn>, rows: ReadonlyArray<CsvRow>): 
   ].join("\n");
 
 /** A Series without its metadata, as `--no-metadata` writes it in JSON. */
-const withoutMetadata = ({ seriesId, observations }: Series) => ({ seriesId, observations });
+const withoutMetadata = ({ seriesId, observations }: AbsSeries) => ({ seriesId, observations });
 
 /** How to render Series for stdout. */
 export interface RenderOptions {
@@ -88,7 +88,7 @@ export interface RenderOptions {
  * stdout is a terminal.
  * @returns The text to write to stdout.
  */
-export const renderSeries = (series: ReadonlyArray<Series>, options: RenderOptions): string =>
+export const renderSeries = (series: ReadonlyArray<AbsSeries>, options: RenderOptions): string =>
   options.format === "csv"
     ? toCsv(options.hasMetadata ? CSV_COLUMNS : CSV_COLUMNS_WITHOUT_METADATA, csvRows(series))
     : JSON.stringify(

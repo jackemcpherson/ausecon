@@ -1,7 +1,7 @@
 import { Effect, Option, Schema, Struct } from "effect";
 import { type CellObject, type WorkSheet, read, utils } from "xlsx";
 
-import { type Series, SeriesId, type Table, TableLayoutError } from "../types";
+import { type AbsSeries, SeriesId, type Table, TableLayoutError } from "../types";
 
 /** Sheets that `readabs` skips by exact name. */
 const SKIPPED_SHEETS = new Set([
@@ -179,16 +179,17 @@ const checkLayout = (
 };
 
 /** Read the series of one checked data sheet, in column order. */
-const sheetSeries = (data: DataSheet, table: Table): ReadonlyArray<Series> => {
+const sheetSeries = (data: DataSheet, table: Table): ReadonlyArray<AbsSeries> => {
   const { sheet, metadataRows } = data;
 
-  return data.seriesColumns.map(([column, seriesId]): Series => {
+  return data.seriesColumns.map(([column, seriesId]): AbsSeries => {
     const metadata = (field: MetadataField): string =>
       cellText(cellAt(sheet, metadataRows[field], column));
 
     return {
+      publisher: "ABS",
       seriesId,
-      seriesDescription: cellText(cellAt(sheet, 0, column)),
+      description: cellText(cellAt(sheet, 0, column)),
       unit: metadata("unit"),
       seriesType: metadata("seriesType"),
       dataType: metadata("dataType"),
@@ -223,7 +224,7 @@ const sheetSeries = (data: DataSheet, table: Table): ReadonlyArray<Series> => {
 export const parseTable: (
   bytes: Uint8Array,
   table: Table,
-) => Effect.Effect<ReadonlyArray<Series>, TableLayoutError> = Effect.fn("parseTable")(function* (
+) => Effect.Effect<ReadonlyArray<AbsSeries>, TableLayoutError> = Effect.fn("parseTable")(function* (
   bytes: Uint8Array,
   table: Table,
 ) {

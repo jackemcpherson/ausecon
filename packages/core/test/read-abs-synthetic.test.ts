@@ -94,8 +94,9 @@ describe("readAbs on a synthetic release", () => {
       expect(requests).toHaveLength(3);
       expect(series.filter(({ seriesId }) => seriesId === "A1000002B")).toEqual([
         {
+          publisher: "ABS",
           seriesId: "A1000002B",
-          seriesDescription: "Synthetic count ;  Australia ;",
+          description: "Synthetic count ;  Australia ;",
           unit: "Number",
           seriesType: "Original",
           dataType: "FLOW",
