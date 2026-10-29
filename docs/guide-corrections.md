@@ -2,7 +2,10 @@
 
 This file lists faults in the published TypeScript style guide that `ausecon`
 found when it applied the guide with current tool releases. Fix each item in
-the guide after `ausecon` v0.1.0 proves the correction.
+the guide after `ausecon` proves the correction.
+
+The guide includes F1 to F15 as of homepage pull request 44 (2026-10-28).
+Record new faults below them.
 
 ---
 
